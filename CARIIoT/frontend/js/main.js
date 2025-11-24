@@ -2,24 +2,8 @@
    CONFIGURAÇÃO E DADOS
    ====================== */
 
-// Lista de motes simulados
-const MOTES = ['MOTE1', 'MOTE2', 'MOTE3', 'MOTE4', 'MOTE5', 'MOTE6'];
-
-// Protocolos simulados
-const PROTOCOLS = ['MQTT', 'CoAP', 'HTTP'];
-
-// Array principal de dados
-let DATA = [];
-
-// Função auxiliar para gerar número aleatório float
-function random(min, max) {
-  return Math.random() * (max - min) + min;
-}
-
-// Função auxiliar para gerar número aleatório inteiro
-function randInt(min, max) {
-  return Math.floor(random(min, max + 1));
-}
+// Variável global para armazenar os dados carregados do Firebase
+window.DATA = [];
 
 // Função debounce - evita execuções rápidas demais
 function debounce(func, wait) {
@@ -46,7 +30,6 @@ const tabs = document.querySelectorAll('.tab');
 const pages = {
   resumo: document.getElementById('page-resumo'),
   dispositivos: document.getElementById('page-dispositivos'),
-  infra: document.getElementById('page-infra'),
   eventos: document.getElementById('page-eventos'),
   tendencias: document.getElementById('page-tendencias'),
   config: document.getElementById('page-config'),
@@ -56,7 +39,6 @@ const fProt = document.getElementById('filterProtocol');
 const fSource = document.getElementById('filterSource');
 const timeRange = document.getElementById('timeRange');
 const refreshBtn = document.getElementById('refreshBtn');
-const fileInput = document.getElementById('fileInput');
 const selMoteDet = document.getElementById('selectMoteDetails');
 
 /* ==========================
@@ -65,8 +47,13 @@ const selMoteDet = document.getElementById('selectMoteDetails');
 
 // Função para popular filtros com base nos dados
 function populateFiltersFromData() {
-  const motes = Array.from(new Set(DATA.map((d) => d.mote))).sort();
-  const prots = Array.from(new Set(DATA.map((d) => d.protocol))).sort();
+  console.log('🔄 Populando filtros com', window.DATA.length, 'registros');
+  
+  const motes = Array.from(new Set(window.DATA.map((d) => d.mote))).sort();
+  const prots = Array.from(new Set(window.DATA.map((d) => d.protocol))).sort();
+
+  console.log('📊 Motes encontrados:', motes);
+  console.log('📊 Protocolos encontrados:', prots);
 
   fMote.innerHTML = '<option value="">Todos os Motes</option>';
   selMoteDet.innerHTML = '';
@@ -95,180 +82,28 @@ function populateFiltersFromData() {
     );
   }
 }
-// Função para assinar dados do Realtime Database e popular DATA
-// Assumimos por padrão que os dados estão em um nó chamado 'Sheet1'.
-// Altere o path em subscribeFirebase() se estiver em outro nó.
-function subscribeFirebase(path = 'Sheet1') {
-  try {
-    const dbRef = ref(db, path);
-    onValue(
-      dbRef,
-      (snapshot) => {
-        const val = snapshot.val();
-        if (!val) {
-          console.log('Firebase: nó vazio em', path);
-          return;
-        }
-        // Se for array já usa; se for objeto (mapa por id) converte para array
-        if (Array.isArray(val)) {
-          DATA = val;
-        } else if (typeof val === 'object') {
-          DATA = Object.values(val);
-        } else {
-          console.warn('Firebase: formato de dados inesperado em', path);
-          return;
-        }
-        // Normaliza/transforma campos do seu JSON para o formato aceito pelo dashboard
-        DATA = DATA.map((r) => {
-          // timestamp: aceita number (ms) ou string ISO nos campos ts/time
-          const rawTs = r.ts ?? r.time ?? r.Time ?? r.timestamp ?? '';
-          let ts;
-          if (typeof rawTs === 'number') {
-            ts = new Date(rawTs).toISOString();
-          } else if (typeof rawTs === 'string') {
-            const d = new Date(rawTs);
-            ts = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-          } else {
-            ts = new Date().toISOString();
-          }
-
-          const mote = r.mote ?? (r.node_id ? 'MOTE' + r.node_id : r.node ?? 'MOTE?');
-          const protocol = r.protocol ?? r.protocolo ?? '';
-          const event = r.event ?? r.evento ?? 'Normal';
-          const source = r.source ?? r.origem ?? 'Mote';
-
-          const packetLoss = Number(r.packetLoss ?? r.perda_pacotes ?? r.perda ?? 0) || 0;
-          const jitter = Number(r.jitter ?? 0) || 0;
-          const rssi = Number(r.rssi ?? 0) || 0;
-          const cpu = Number(r.cpu ?? 0) || 0;
-          const ram = Number(r.ram ?? 0) || 0;
-          const energy = Number(r.energy ?? r.consumo_energia ?? 0) || 0;
-
-          return {
-            ts,
-            mote,
-            protocol,
-            event,
-            packetLoss,
-            jitter,
-            rssi,
-            cpu,
-            ram,
-            energy,
-            source,
-          };
-        });
-        populateFiltersFromData();
-        renderAll();
-        console.log('Firebase: dados carregados (', DATA.length, 'registros)');
-      },
-      (err) => console.error('Firebase read error:', err)
-    );
-  } catch (err) {
-    console.error('subscribeFirebase error', err);
-  }
-}
-
-// Popula filtros ao carregar
-populateFiltersFromData();
 
 /* ==========================
-   NAVEGAÇÃO ENTRE ABAS
+   INSTÂNCIAS DE GRÁFICOS
    ========================== */
-
-// Adiciona listeners para navegação entre abas
-tabs.forEach((tab) => {
-  tab.addEventListener('click', () => {
-    const key = tab.dataset.tab;
-    tabs.forEach((t) => t.classList.remove('active'));
-    tab.classList.add('active');
-    Object.keys(pages).forEach((k) => {
-      pages[k].style.display = k === key ? 'flex' : 'none';
-    });
-    renderActiveTab(); // Renderiza apenas aba ativa
-  });
-});
-
-/* ==========================
-   LISTENERS DE EVENTOS
-   ========================== */
-
-// Atualiza dados ao clicar em Atualizar
-refreshBtn.addEventListener('click', renderAll);
-
-// Aplica filtros e atualiza gráficos ao mudar seleção
-const debouncedRender = debounce(renderAll, 300);
-[fMote, fProt, fSource, timeRange].forEach((el) =>
-  el.addEventListener('change', debouncedRender)
-);
-
-// Renderiza série e KPIs do dispositivo selecionado
-selMoteDet.addEventListener('change', () => {
-  renderDeviceSeries(selMoteDet.value);
-  renderDeviceKpis(selMoteDet.value);
-});
-
-/* ==========================
-   UPLOAD DE ARQUIVOS
-   ========================== */
-
-/* Upload de arquivos JSON/CSV */
-fileInput.addEventListener('change', async (ev) => {
-  const f = ev.target.files[0];
-  if (!f) return;
-  const txt = await f.text();
-  try {
-    // Detecta formato do arquivo
-    if (f.name.toLowerCase().endsWith('.json')) {
-      const parsed = JSON.parse(txt);
-      if (Array.isArray(parsed)) {
-        DATA = parsed;
-      } else {
-        alert('JSON deve ser um array de objetos');
-        return;
-      }
-    } else {
-      // Parse de CSV simples
-      const lines = txt.split(/\r?\n/).filter(Boolean);
-      const header = lines.shift().split(',');
-      DATA = lines.map((l) => {
-        const vals = l.split(',');
-        const obj = {};
-        header.forEach((h, i) => (obj[h.trim()] = vals[i] ? vals[i].trim() : ''));
-        return {
-          ts: obj.ts || new Date().toISOString(),
-          mote: obj.mote || obj.Mote || 'MOTE?',
-          protocol: obj.protocol || 'MQTT',
-          event: obj.event || 'Normal',
-          packetLoss: parseFloat(obj.packetLoss || obj.PacketLoss || 0),
-          jitter: parseFloat(obj.jitter || 0),
-          rssi: parseFloat(obj.rssi || 0),
-          cpu: parseFloat(obj.cpu || 0),
-          ram: parseFloat(obj.ram || 0),
-          energy: parseFloat(obj.energy || 0),
-          source: obj.source || 'Mote',
-        };
-      });
-    }
-    populateFiltersFromData();
-    renderAll();
-  } catch (err) {
-    alert('Erro ao ler arquivo: ' + err.message);
-  }
-});
+let timeChart = null,
+  topChart = null,
+  deviceSeries = null,
+  compareChart = null;
 
 /* ==========================
    FUNÇÕES DE AGREGACAO E FILTRO
    ========================== */
 
-// Aplica filtros dos controles a DATA
+// Aplica filtros dos controles a window.DATA
 function applyFilters(data) {
   const moteFilter = fMote.value;
   const protFilter = fProt.value;
   const srcFilter = fSource.value;
   const minutes = parseInt(timeRange.value, 10) || 15;
   const since = Date.now() - minutes * 60000;
-  return data.filter((d) => {
+  
+  const filtered = data.filter((d) => {
     const t = new Date(d.ts).getTime();
     if (t < since) return false;
     if (moteFilter && d.mote !== moteFilter) return false;
@@ -276,6 +111,11 @@ function applyFilters(data) {
     if (srcFilter && d.source !== srcFilter) return false;
     return true;
   });
+  
+  console.log('🔍 Filtros aplicados:', { moteFilter, protFilter, srcFilter, minutes });
+  console.log('📊 Dados filtrados:', filtered.length, 'de', data.length, 'registros');
+  
+  return filtered;
 }
 
 // KPIs agregados do último timestamp
@@ -285,11 +125,6 @@ function aggLatest(filtered) {
   const rows = filtered.filter((r) => r.ts === lastTs);
   const loss = rows.reduce((s, r) => s + (r.packetLoss || 0), 0) / rows.length;
   const jitter = rows.reduce((s, r) => s + (r.jitter || 0), 0) / rows.length;
-  const cpuHostRows = filtered.filter((r) => r.source === 'Host');
-  const cpuHost =
-    cpuHostRows.length > 0
-      ? cpuHostRows.reduce((s, r) => s + (r.cpu || 0), 0) / cpuHostRows.length
-      : 0;
   const cpuMoteRows = filtered.filter((r) => r.source === 'Mote');
   const cpuMote =
     cpuMoteRows.length > 0
@@ -299,7 +134,7 @@ function aggLatest(filtered) {
   const eventRate = filtered.filter(
     (r) => r.event !== 'Normal' && new Date(r.ts) > new Date(Date.now() - 60000)
   ).length;
-  return { loss, jitter, cpuHost, cpuMote, energy, eventRate };
+  return { loss, jitter, cpuMote, energy, eventRate };
 }
 
 // Agregação para gráficos de séries
@@ -328,17 +163,6 @@ function aggregateForChart(filtered) {
 }
 
 /* ==========================
-   INSTÂNCIAS DE GRÁFICOS
-   ========================== */
-let timeChart = null,
-  topChart = null,
-  deviceSeries = null,
-  hostSeries = null,
-  topProcesses = null,
-  scatterChart = null,
-  compareChart = null;
-
-/* ==========================
    FUNÇÕES DE RENDERIZAÇÃO
    ========================== */
 
@@ -349,14 +173,13 @@ function themeColor(key) {
 
 // Renderiza KPIs principais
 function renderKPIs() {
-  const f = applyFilters(DATA);
+  console.log('📊 Renderizando KPIs...');
+  const f = applyFilters(window.DATA);
   const a = aggLatest(f);
   document.getElementById('kpiPacketLoss').textContent =
     a.loss === undefined ? '—' : (a.loss * 100).toFixed(2) + '%';
   document.getElementById('kpiJitter').textContent =
     a.jitter === undefined ? '—' : Math.round(a.jitter) + ' ms';
-  document.getElementById('kpiCpuHost').textContent =
-    a.cpuHost ? Math.round(a.cpuHost) + '%' : '—';
   document.getElementById('kpiCpuMote').textContent =
     a.cpuMote ? Math.round(a.cpuMote) + '%' : '—';
   document.getElementById('kpiEnergy').textContent =
@@ -367,7 +190,8 @@ function renderKPIs() {
 
 // Renderiza gráfico de séries temporais (PacketLoss/Jitter)
 function renderTimeSeries() {
-  const f = applyFilters(DATA);
+  console.log('📈 Renderizando série temporal...');
+  const f = applyFilters(window.DATA);
   const s = aggregateForChart(f);
   const ctx = document.getElementById('timeChart').getContext('2d');
   if (timeChart) {
@@ -425,76 +249,10 @@ function renderTimeSeries() {
   }
 }
 
-// Renderiza feed de eventos e tabela de últimas leituras
-function renderEventsFeed() {
-  const f = applyFilters(DATA).slice(-200).reverse();
-  const tbody = document.querySelector('#eventsFeed tbody');
-  tbody.innerHTML = '';
-  f.slice(0, 10).forEach((r) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="color:${themeColor(
-      '--muted'
-    )}">${new Date(r.ts).toLocaleTimeString()}</td><td>${r.mote}</td><td style="color:${
-      r.event === 'Normal'
-        ? themeColor('--accent3')
-        : r.event.includes('DoS')
-        ? themeColor('--danger')
-        : themeColor('--accent2')
-    }">${r.event}</td><td>${(r.packetLoss * 100).toFixed(2)}%</td>`;
-    tbody.appendChild(tr);
-  });
-  const lt = document.querySelector('#latestTable tbody');
-  lt.innerHTML = '';
-  f.slice(0, 50).forEach((r) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="color:${themeColor('--muted')}">${new Date(
-      r.ts
-    ).toLocaleString()}</td><td>${r.mote}</td><td>${r.protocol}</td><td>${r.event}</td><td>${(
-      r.packetLoss * 100
-    ).toFixed(2)}%</td><td>${Math.round(r.jitter)} ms</td><td>${r.rssi} dBm</td>`;
-    lt.appendChild(tr);
-  });
-}
-
-// Função para cor do heatmap
-function heatColor(v) {
-  // Gradiente das cores do tema
-  const r = Math.round(250 * Math.min(1, v * 1.4));
-  const g = Math.round(176 * (1 - v));
-  const b = Math.round(92 * (1 - v));
-  return `rgb(${r},${g},${b})`;
-}
-
-// Renderiza heatmap pequeno
-function renderHeatmapSmall() {
-  const f = applyFilters(DATA);
-  const cont = document.getElementById('heatmapArea');
-  cont.innerHTML = '';
-  const motes = Array.from(new Set(f.map((d) => d.mote))).slice(0, 12);
-  if (motes.length === 0) {
-    cont.textContent = 'Sem dados no período selecionado';
-    return;
-  }
-  motes.forEach((m) => {
-    const row = document.createElement('div');
-    row.className = 'heat-row';
-    for (let h = 0; h < 24; h++) {
-      const v =
-        Math.min(1, Math.abs(Math.sin((h + m.length) / 6)) * 0.35) +
-        (m === 'MOTE3' ? 0.25 : 0);
-      const c = document.createElement('div');
-      c.className = 'heat-cell';
-      c.style.background = heatColor(v);
-      c.title = `${m} ${h}:00 = ${(v * 100).toFixed(1)}%`;
-      row.appendChild(c);
-    }
-    cont.appendChild(row);
-  });
-}
-
 // Renderiza gráfico de barras dos motes com maior perda
 function renderTopChart() {
-  const f = applyFilters(DATA);
+  console.log('📊 Renderizando top chart...');
+  const f = applyFilters(window.DATA);
   const agg = {};
   f.forEach((d) => (agg[d.mote] = (agg[d.mote] || 0) + d.packetLoss));
   const items = Object.entries(agg)
@@ -541,7 +299,8 @@ function renderTopChart() {
 
 // Renderiza série de dispositivo selecionado
 function renderDeviceSeries(mote) {
-  const f = applyFilters(DATA).filter((d) => d.mote === mote);
+  console.log('📈 Renderizando série do dispositivo:', mote);
+  const f = applyFilters(window.DATA).filter((d) => d.mote === mote);
   const s = f.slice(-120);
   const labels = s.map((x) => new Date(x.ts).toLocaleTimeString());
   const loss = s.map((x) => x.packetLoss * 100);
@@ -594,7 +353,7 @@ function renderDeviceSeries(mote) {
 
 // Renderiza KPIs do dispositivo selecionado
 function renderDeviceKpis(mote) {
-  const rows = applyFilters(DATA).filter((d) => d.mote === mote);
+  const rows = applyFilters(window.DATA).filter((d) => d.mote === mote);
   if (rows.length === 0) {
     ['d_kpi_loss', 'd_kpi_jitter', 'd_kpi_rssi', 'd_kpi_cpu', 'd_kpi_ram'].forEach(
       (id) => (document.getElementById(id).textContent = '—')
@@ -612,70 +371,70 @@ function renderDeviceKpis(mote) {
     Math.round(rows.reduce((s, r) => s + r.ram, 0) / rows.length) + '%';
 }
 
-// Renderiza gráficos de host (infra)
-function renderHostSeries() {
-  const f = applyFilters(DATA).filter((d) => d.source === 'Host');
-  const s = f.slice(-120);
-  const labels = s.map((x) => new Date(x.ts).toLocaleTimeString());
-  const cpu = s.map((x) => x.cpu);
-  const ram = s.map((x) => x.ram);
-  const ctx = document.getElementById('hostSeries').getContext('2d');
-  if (hostSeries) {
-    let changed = false;
-    if (JSON.stringify(hostSeries.data.labels) !== JSON.stringify(labels)) {
-      hostSeries.data.labels = labels;
-      changed = true;
-    }
-    if (JSON.stringify(hostSeries.data.datasets[0].data) !== JSON.stringify(cpu)) {
-      hostSeries.data.datasets[0].data = cpu;
-      changed = true;
-    }
-    if (JSON.stringify(hostSeries.data.datasets[1].data) !== JSON.stringify(ram)) {
-      hostSeries.data.datasets[1].data = ram;
-      changed = true;
-    }
-    if (changed) hostSeries.update();
-  } else {
-    hostSeries = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: 'CPU %',
-            data: cpu,
-            borderColor: themeColor('--accent2'),
-            backgroundColor: 'rgba(250,164,92,0.10)',
-            tension: 0.25,
-          },
-          {
-            label: 'RAM %',
-            data: ram,
-            borderColor: themeColor('--accent3'),
-            backgroundColor: 'rgba(115,176,186,0.13)',
-            tension: 0.25,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-      },
-    });
+// Renderiza tabela de logs do dispositivo selecionado
+function renderDeviceLogs(mote) {
+  console.log('📋 Renderizando logs do dispositivo:', mote);
+  const rows = applyFilters(window.DATA).filter((d) => d.mote === mote).slice(-100).reverse();
+  const tbody = document.querySelector('#deviceLogs tbody');
+  tbody.innerHTML = '';
+  
+  if (rows.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="4" style="text-align:center;color:' + themeColor('--muted') + '">Sem dados para este dispositivo</td>';
+    tbody.appendChild(tr);
+    return;
   }
-  document.getElementById('infra_cpu').textContent = cpu.length
-    ? Math.round(cpu.reduce((s, v) => s + v, 0) / cpu.length) + '%'
-    : '—';
-  document.getElementById('infra_ram').textContent = ram.length
-    ? Math.round(ram.reduce((s, v) => s + v, 0) / ram.length) + '%'
-    : '—';
-  document.getElementById('infra_disk').textContent = randInt(5, 50) + ' MB/s';
-  document.getElementById('infra_net').textContent = randInt(10, 100) + ' MB/s';
+  
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="color:${themeColor('--muted')}">${new Date(r.ts).toLocaleString()}</td><td style="color:${
+      r.event === 'Normal'
+        ? themeColor('--accent3')
+        : r.event.includes('DoS')
+        ? themeColor('--danger')
+        : themeColor('--accent2')
+    }">${r.event}</td><td>${(r.packetLoss * 100).toFixed(2)}%</td><td>${Math.round(r.jitter)} ms</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// Renderiza tabela de logs recentes na aba Resumo
+function renderLatestLogs() {
+  console.log('📋 Renderizando logs recentes...');
+  const rows = applyFilters(window.DATA).slice(-100).reverse();
+  const tbody = document.querySelector('#latestTable tbody');
+  tbody.innerHTML = '';
+
+  if (rows.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="8" style="text-align:center;color:${themeColor('--muted')}">Nenhum registro de log encontrado para os filtros atuais.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    const severityColor = r.event.includes('DoS') ? themeColor('--danger') : (r.packetLoss > 0.05 ? themeColor('--accent2') : themeColor('--text'));
+    const severityText = r.event.includes('DoS') ? 'Crítica' : (r.packetLoss > 0.05 ? 'Atenção' : 'Normal');
+
+    tr.innerHTML = `
+      <td style="color:${themeColor('--muted')}">${new Date(r.ts).toLocaleString()}</td>
+      <td>${r.mote}</td>
+      <td>${r.protocol}</td>
+      <td>${r.event}</td>
+      <td>${(r.packetLoss * 100).toFixed(2)}%</td>
+      <td>${Math.round(r.jitter)} ms</td>
+      <td>${r.rssi} dBm</td>
+      <td style="color:${severityColor}">${severityText}</td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 // Renderiza timeline de eventos
 function renderTimeline() {
-  const f = applyFilters(DATA).filter((d) => d.event !== 'Normal').slice(-200).reverse();
+  console.log('⏰ Renderizando timeline...');
+  const f = applyFilters(window.DATA).filter((d) => d.event !== 'Normal').slice(-200).reverse();
   const tbody = document.querySelector('#timelineTable tbody');
   tbody.innerHTML = '';
   f.forEach((r) => {
@@ -702,168 +461,30 @@ function renderTimeline() {
   });
 }
 
-// Renderiza gráfico de top processos (infra)
-function renderTopProcesses() {
-  const labels = ['Prometheus', 'InfluxDB', 'Push Gateway'];
-  const cpuValues = labels.map(() => randInt(10, 80));
-  const ramValues = labels.map(() => randInt(10, 80));
-  const ctx = document.getElementById('topProcesses').getContext('2d');
-  if (topProcesses) {
-    let changed = false;
-    if (JSON.stringify(topProcesses.data.labels) !== JSON.stringify(labels)) {
-      topProcesses.data.labels = labels;
-      changed = true;
-    }
-    if (JSON.stringify(topProcesses.data.datasets[0].data) !== JSON.stringify(cpuValues)) {
-      topProcesses.data.datasets[0].data = cpuValues;
-      changed = true;
-    }
-    if (JSON.stringify(topProcesses.data.datasets[1].data) !== JSON.stringify(ramValues)) {
-      topProcesses.data.datasets[1].data = ramValues;
-      changed = true;
-    }
-    if (changed) topProcesses.update();
-  } else {
-    topProcesses = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: 'CPU (%)',
-            data: cpuValues,
-            backgroundColor: themeColor('--accent2'),
-            borderRadius: 0,
-            maxBarThickness: 22,
-          },
-          {
-            label: 'RAM (%)',
-            data: ramValues,
-            backgroundColor: themeColor('--accent3'),
-            borderRadius: 0,
-            maxBarThickness: 22,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        indexAxis: 'y',
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: {
-              color: themeColor('--muted'),
-              font: {
-                family: 'Segoe UI, Inter, Roboto, Arial, sans-serif',
-                size: 13,
-                weight: 'normal',
-              },
-              boxWidth: 14,
-              boxHeight: 14,
-              padding: 10,
-              usePointStyle: true,
-              pointStyle: 'rect',
-            },
-          },
-        },
-        scales: {
-          x: {
-            title: {
-              display: true,
-              text: 'Consumo (%)',
-              color: themeColor('--muted'),
-              font: {
-                family: 'Segoe UI, Inter, Roboto, Arial, sans-serif',
-                size: 13,
-                weight: 'normal',
-              },
-            },
-            ticks: {
-              color: themeColor('--muted'),
-              font: {
-                family: 'Segoe UI, Inter, Roboto, Arial, sans-serif',
-                size: 13,
-              },
-            },
-            grid: {
-              color: 'rgba(93,227,250,0.08)',
-            },
-          },
-          y: {
-            ticks: {
-              color: themeColor('--text'),
-              font: {
-                family: 'Segoe UI, Inter, Roboto, Arial, sans-serif',
-                size: 13,
-              },
-            },
-            grid: {
-              color: 'rgba(93,227,250,0.04)',
-            },
-          },
-        },
-      }
-    });
-  }
-}
-
-// Renderiza gráfico de dispersão RSSI x PacketLoss
-function renderScatter() {
-  const f = applyFilters(DATA);
-  const agg = {};
-  f.forEach((d) => {
-    if (!agg[d.mote]) agg[d.mote] = { loss: 0, rssi: 0, count: 0 };
-    agg[d.mote].loss += d.packetLoss;
-    agg[d.mote].rssi += d.rssi;
-    agg[d.mote].count++;
-  });
-  const sample = Object.keys(agg).map((k) => ({
-    mote: k,
-    loss: (agg[k].loss / agg[k].count) * 100,
-    rssi: agg[k].rssi / agg[k].count,
-  }));
-  const ctx = document.getElementById('scatterChart').getContext('2d');
-  const datasets = sample.map((s) => ({
-    label: s.mote,
-    data: [{ x: s.rssi, y: s.loss, r: 6 + Math.random() * 6 }],
-    backgroundColor: themeColor('--accent3'),
-  }));
-  if (scatterChart) {
-    let changed = false;
-    if (JSON.stringify(scatterChart.data.datasets) !== JSON.stringify(datasets)) {
-      scatterChart.data.datasets = datasets;
-      changed = true;
-    }
-    if (changed) scatterChart.update();
-  } else {
-    scatterChart = new Chart(ctx, {
-      type: 'bubble',
-      data: {
-        datasets: datasets,
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { title: { display: true, text: 'RSSI (dBm)' } },
-          y: { title: { display: true, text: 'Perda de Pacotes (%)' } },
-        },
-      },
-    });
-  }
-}
-
 // Renderiza gráfico comparativo de janelas
 function renderCompare() {
+  console.log('📊 Renderizando comparativo...');
   const labels = [];
-  const a = [],
-    b = [];
+  const a = [], b = [];
+  const now = Date.now();
   for (let i = 23; i >= 0; i--) {
     labels.push(`${i}h`);
-    a.push(Math.abs(Math.sin(i / 4)) * 5 + Math.random() * 1);
-    b.push(Math.abs(Math.sin((i + 3) / 4)) * 5 + Math.random() * 1);
+    const startA = now - (i + 1) * 3600 * 1000;
+    const endA = now - i * 3600 * 1000;
+    const startB = now - (i + 25) * 3600 * 1000;
+    const endB = now - (i + 24) * 3600 * 1000;
+    const valsA = window.DATA.filter((d) => {
+      const t = new Date(d.ts).getTime();
+      return t >= startA && t < endA;
+    }).map((d) => d.packetLoss || 0);
+    const valsB = window.DATA.filter((d) => {
+      const t = new Date(d.ts).getTime();
+      return t >= startB && t < endB;
+    }).map((d) => d.packetLoss || 0);
+    const avgA = valsA.length ? valsA.reduce((s, v) => s + v, 0) / valsA.length : 0;
+    const avgB = valsB.length ? valsB.reduce((s, v) => s + v, 0) / valsB.length : 0;
+    a.push(avgA * 100);
+    b.push(avgB * 100);
   }
   const ctx = document.getElementById('compareChart').getContext('2d');
   const datasets = [
@@ -908,62 +529,276 @@ function renderCompare() {
   }
 }
 
-// Renderiza imagem de simulação (SVG)
+// Renderiza topologia interativa com D3.js
 function renderSimImage() {
-  const svg = encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='600'><rect width='100%' height='100%' fill='#141b1c'/><circle cx='300' cy='300' r='80' fill='#5DE3FA' opacity='0.3'/><circle cx='600' cy='300' r='80' fill='#5DE3FA' opacity='0.5'/><circle cx='900' cy='300' r='80' fill='#FAA45C' opacity='0.7'/><text x='50%' y='50%' fill='#73B0BA' font-family='Segoe UI, Arial' font-size='24' text-anchor='middle'>Visualização da Topologia IoT</text><text x='50%' y='55%' fill='#696b7a' font-family='Segoe UI, Arial' font-size='14' text-anchor='middle'>(Substitua por imagem real da simulação)</text></svg>`
-  );
-  document.getElementById('simImage').src = `data:image/svg+xml;utf8,${svg}`;
-}
-
-// Renderiza heatmap grande (tendências)
-function renderHeatmapBig() {
-  const f = applyFilters(DATA);
-  const cont = document.getElementById('heatmapBig');
-  cont.innerHTML = '';
-  const motes = Array.from(new Set(f.map((d) => d.mote)));
+  const container = document.getElementById('simImage');
+  if (!container) return;
+  
+  container.style.width = '100%';
+  container.style.height = '100%';
+  container.innerHTML = '';
+  
+  const f = applyFilters(window.DATA);
+  const motes = Array.from(new Set(f.map(d => d.mote)));
+  
   if (motes.length === 0) {
-    cont.textContent = 'Sem dados no período selecionado';
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#73B0BA;font-size:14px;">⏳ Aguardando dados da rede...</div>';
     return;
   }
-  const headerRow = document.createElement('div');
-  headerRow.style.display = 'flex';
-  headerRow.style.gap = '4px';
-  headerRow.style.marginBottom = '6px';
-  headerRow.innerHTML = '<div style="width:60px;font-size:11px;color:' + themeColor('--muted') + '"></div>';
-  for (let h = 0; h < 24; h++) {
-    const cell = document.createElement('div');
-    cell.style.flex = '1';
-    cell.style.fontSize = '10px';
-    cell.style.color = themeColor('--muted');
-    cell.style.textAlign = 'center';
-    cell.textContent = h;
-    headerRow.appendChild(cell);
+  
+  if (typeof d3 === 'undefined') {
+    console.warn('D3.js não disponível, usando SVG estático');
+    renderSimImageStatic();
+    return;
   }
-  cont.appendChild(headerRow);
-  motes.forEach((mote) => {
-    const row = document.createElement('div');
-    row.style.display = 'flex';
-    row.style.gap = '4px';
-    row.style.marginBottom = '6px';
-    const label = document.createElement('div');
-    label.style.width = '60px';
-    label.style.fontSize = '11px';
-    label.style.color = themeColor('--accent');
-    label.textContent = mote;
-    row.appendChild(label);
-    for (let hour = 0; hour < 24; hour++) {
-      const value =
-        Math.min(1, Math.abs(Math.sin((hour + mote.length) / 6)) * 0.35) +
-        (mote === 'MOTE3' ? 0.25 : 0);
-      const cell = document.createElement('div');
-      cell.className = 'heat-cell';
-      cell.style.background = heatColor(value);
-      cell.title = `${mote} ${hour}:00 = ${(value * 100).toFixed(1)}%`;
-      row.appendChild(cell);
-    }
-    cont.appendChild(row);
+  
+  // Criar wrapper para controles
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'relative';
+  wrapper.style.width = '100%';
+  wrapper.style.height = '100%';
+  container.appendChild(wrapper);
+  
+  // Adicionar botões de controle
+  const controls = document.createElement('div');
+  controls.className = 'topology-controls';
+  controls.innerHTML = `
+    <button class="topology-btn" onclick="resetTopologyZoom()">🔄 Reset Zoom</button>
+    <button class="topology-btn" onclick="toggleTopologyPhysics()">⚡ Física: ON</button>
+  `;
+  wrapper.appendChild(controls);
+  
+  // Container do SVG
+  const svgContainer = document.createElement('div');
+  svgContainer.style.width = '100%';
+  svgContainer.style.height = '100%';
+  wrapper.appendChild(svgContainer);
+  
+  const nodes = [
+    { id: 'Gateway', type: 'gateway', fx: 600, fy: 300 },
+    ...motes.map(m => ({ id: m, type: 'mote' }))
+  ];
+  
+  const links = motes.map(m => {
+    const moteData = f.filter(d => d.mote === m);
+    const loss = moteData.length > 0 
+      ? moteData.reduce((s, d) => s + d.packetLoss, 0) / moteData.length 
+      : 0;
+    return { source: 'Gateway', target: m, loss: loss };
   });
+  
+  const width = 1200, height = 600;
+  const svg = d3.select(svgContainer)
+    .append('svg')
+    .attr('width', '100%')
+    .attr('height', '100%')
+    .attr('viewBox', `0 0 ${width} ${height}`)
+    .style('background', '#141b1c');
+  
+  const g = svg.append('g');
+  
+  // Salvar zoom para reset
+  const zoom = d3.zoom()
+    .scaleExtent([0.3, 5])
+    .on('zoom', (event) => {
+      g.attr('transform', event.transform);
+    });
+  
+  svg.call(zoom);
+  
+  // Função global para reset de zoom
+  window.resetTopologyZoom = () => {
+    svg.transition().duration(750).call(
+      zoom.transform,
+      d3.zoomIdentity
+    );
+  };
+  
+  const simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(200))
+    .force('charge', d3.forceManyBody().strength(-400))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(50));
+  
+  // Toggle física
+  window.toggleTopologyPhysics = () => {
+    const btn = document.querySelector('.topology-controls button:nth-child(2)');
+    if (simulation.alpha() > 0) {
+      simulation.stop();
+      btn.textContent = '⚡ Física: OFF';
+    } else {
+      simulation.alpha(1).restart();
+      btn.textContent = '⚡ Física: ON';
+    }
+  };
+  
+  // Gradiente para links
+  const defs = svg.append('defs');
+  links.forEach((link, i) => {
+    const gradient = defs.append('linearGradient')
+      .attr('id', `gradient-${i}`)
+      .attr('gradientUnits', 'userSpaceOnUse');
+    
+    gradient.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', '#5DE3FA');
+    
+    gradient.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', link.loss > 0.1 ? '#FAA45C' : '#73B0BA');
+  });
+  
+  const link = g.append('g')
+    .selectAll('line')
+    .data(links)
+    .join('line')
+    .attr('stroke', (d, i) => `url(#gradient-${i})`)
+    .attr('stroke-width', d => d.loss > 0.1 ? 3 : 2)
+    .attr('opacity', 0.7);
+  
+  const node = g.append('g')
+    .selectAll('circle')
+    .data(nodes)
+    .join('circle')
+    .attr('r', d => d.type === 'gateway' ? 35 : 20)
+    .attr('fill', d => d.type === 'gateway' ? '#5DE3FA' : '#73B0BA')
+    .attr('stroke', '#5DE3FA')
+    .attr('stroke-width', d => d.type === 'gateway' ? 3 : 2)
+    .attr('opacity', 0.9)
+    .style('cursor', 'grab')
+    .style('filter', 'drop-shadow(0 0 8px rgba(93, 227, 250, 0.5))')
+    .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended));
+  
+  const label = g.append('g')
+    .selectAll('text')
+    .data(nodes)
+    .join('text')
+    .text(d => d.id)
+    .attr('font-size', d => d.type === 'gateway' ? 13 : 11)
+    .attr('font-weight', d => d.type === 'gateway' ? 'bold' : 'normal')
+    .attr('fill', '#fff')
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => d.type === 'gateway' ? 5 : 4)
+    .style('pointer-events', 'none')
+    .style('user-select', 'none')
+    .style('text-shadow', '0 0 4px rgba(0,0,0,0.8)');
+  
+  node.append('title')
+    .text(d => {
+      if (d.type === 'gateway') return '🌐 Gateway Central\n(arraste para mover)';
+      const moteData = f.filter(r => r.mote === d.id);
+      if (moteData.length === 0) return d.id;
+      const avgLoss = (moteData.reduce((s, r) => s + r.packetLoss, 0) / moteData.length * 100).toFixed(2);
+      const avgJitter = Math.round(moteData.reduce((s, r) => s + r.jitter, 0) / moteData.length);
+      const avgRssi = Math.round(moteData.reduce((s, r) => s + r.rssi, 0) / moteData.length);
+      return `📡 ${d.id}\n━━━━━━━━━━━━━\n📊 Perda: ${avgLoss}%\n⏱️ Jitter: ${avgJitter}ms\n📶 RSSI: ${avgRssi}dBm\n\n💡 Arraste para mover`;
+    });
+  
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+    
+    node
+      .attr('cx', d => d.x)
+      .attr('cy', d => d.y);
+    
+    label
+      .attr('x', d => d.x)
+      .attr('y', d => d.y);
+  });
+  
+  function dragstarted(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+    d3.select(this).style('cursor', 'grabbing');
+  }
+  
+  function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+  }
+  
+  function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    if (d.type !== 'gateway') {
+      d.fx = null;
+      d.fy = null;
+    }
+    d3.select(this).style('cursor', 'grab');
+  }
+  
+  // Legendas
+  const legend = g.append('g')
+    .attr('transform', 'translate(20, 20)');
+  
+  const legendData = [
+    { color: '#5DE3FA', text: '⚡ Gateway' },
+    { color: '#73B0BA', text: '📡 Mote OK (<5% perda)' },
+    { color: '#FAA45C', text: '⚠️ Mote Degradado (>10% perda)' }
+  ];
+  
+  legendData.forEach((item, i) => {
+    const lg = legend.append('g')
+      .attr('transform', `translate(0, ${i * 25})`);
+    
+    lg.append('circle')
+      .attr('r', 8)
+      .attr('fill', item.color)
+      .attr('opacity', 0.9);
+    
+    lg.append('text')
+      .attr('x', 15)
+      .attr('y', 4)
+      .attr('fill', '#fff')
+      .attr('font-size', 11)
+      .style('text-shadow', '0 0 4px rgba(0,0,0,0.8)')
+      .text(item.text);
+  });
+}
+
+// Função de fallback para SVG estático
+function renderSimImageStatic() {
+  const container = document.getElementById('simImage');
+  if (!container) return;
+  
+  const f = applyFilters(window.DATA);
+  const motes = Array.from(new Set(f.map(d => d.mote))).slice(0, 8);
+  
+  let circles = '';
+  let lines = '';
+  
+  motes.forEach((mote, i) => {
+    const angle = (i * 2 * Math.PI) / motes.length;
+    const x = 600 + 220 * Math.cos(angle);
+    const y = 300 + 220 * Math.sin(angle);
+    
+    const moteData = f.filter(d => d.mote === mote);
+    const moteLoss = moteData.length > 0 
+      ? moteData.reduce((sum, d) => sum + d.packetLoss, 0) / moteData.length 
+      : 0;
+    const color = moteLoss > 0.1 ? '#FAA45C' : moteLoss > 0.05 ? '#73B0BA' : '#5DE3FA';
+    
+    lines += `<line x1="600" y1="300" x2="${x}" y2="${y}" stroke="${color}" stroke-width="2" opacity="0.6"/>`;
+    circles += `<circle cx="${x}" cy="${y}" r="28" fill="${color}" opacity="0.8"/>`;
+    circles += `<text x="${x}" y="${y+5}" fill="#141b1c" font-size="11" font-weight="600" text-anchor="middle">${mote}</text>`;
+  });
+  
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 1200 600'>
+    <rect width='100%' height='100%' fill='#141b1c'/>
+    ${lines}
+    <circle cx='600' cy='300' r='45' fill='#5DE3FA' opacity='0.95'/>
+    <text x='600' y='305' fill='#141b1c' font-size='12' font-weight='bold' text-anchor='middle'>GATEWAY</text>
+    ${circles}
+  </svg>`;
+  
+  container.innerHTML = svg;
 }
 
 /* ==========================
@@ -972,14 +807,17 @@ function renderHeatmapBig() {
 
 // Renderiza aba ativa com base na navegação
 function renderActiveTab() {
-  const activeTab = document.querySelector('.tab.active').dataset.tab;
+  const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+  if (!activeTab) return;
+  
+  console.log('🎯 Renderizando aba:', activeTab);
+  
   switch (activeTab) {
     case 'resumo':
       renderKPIs();
       renderTimeSeries();
-      renderEventsFeed();
-      renderHeatmapSmall();
       renderTopChart();
+      renderLatestLogs();
       renderSimImage();
       break;
     case 'dispositivos':
@@ -987,18 +825,13 @@ function renderActiveTab() {
         const mote = selMoteDet.value || selMoteDet.options[0].value;
         renderDeviceSeries(mote);
         renderDeviceKpis(mote);
+        renderDeviceLogs(mote);
       }
-      break;
-    case 'infra':
-      renderHostSeries();
-      renderTopProcesses();
       break;
     case 'eventos':
       renderTimeline();
       break;
     case 'tendencias':
-      renderHeatmapBig();
-      renderScatter();
       renderCompare();
       break;
     case 'config':
@@ -1009,48 +842,181 @@ function renderActiveTab() {
 
 // Atualiza todos os dados e filtros
 function renderAll() {
+  console.log('🔄 Iniciando renderAll()...');
   populateFiltersFromData();
   renderSimImage();
   renderActiveTab();
 }
 
 /* ==========================
-   ATUALIZAÇÃO EM TEMPO REAL
+   ASSINATURA DO FIREBASE
    ========================== */
 
-// Atualiza dados em tempo real a cada 4 segundos
-setInterval(() => {
-  if (DATA.length === 0) return;
-  for (let i = 0; i < 10; i++) {
-    const idx = DATA.length - 1 - i;
-    if (idx < 0) break;
-    DATA[idx].packetLoss = Math.max(0, DATA[idx].packetLoss + (Math.random() - 0.5) * 0.002);
-    DATA[idx].jitter = Math.max(1, DATA[idx].jitter + (Math.random() - 0.5) * 2);
-  }
-  renderActiveTab();
-}, 4000);
+// Função para assinar dados do Realtime Database e popular window.DATA
+function subscribeFirebase(path = 'logs') {
+  console.log('🔥 Conectando ao Firebase no caminho:', path);
+  
+  try {
+    const dbRef = ref(db, path);
+    onValue(
+      dbRef,
+      (snapshot) => {
+        console.log('📥 Dados recebidos do Firebase');
+        const val = snapshot.val();
+        
+        if (!val) {
+          console.warn('⚠️ Firebase: nó vazio em', path);
+          console.log('💡 Dica: Verifique se há dados no caminho "' + path + '" no Firebase Realtime Database');
+          return;
+        }
+        
+        console.log('📦 Tipo de dados recebidos:', typeof val);
+        console.log('📦 Dados brutos:', val);
+        
+        // Converte os dados para array
+        if (Array.isArray(val)) {
+          window.DATA = val;
+        } else if (typeof val === 'object') {
+          if (Array.isArray(val.logs)) {
+            window.DATA = val.logs;
+          } else {
+            window.DATA = Object.values(val);
+          }
+        } else {
+          console.warn('⚠️ Firebase: formato de dados inesperado em', path);
+          return;
+        }
+        
+        console.log('📊 Total de registros antes da normalização:', window.DATA.length);
+        
+        // Normaliza os dados
+        window.DATA = window.DATA.map((r, index) => {
+          const rawTs = r.ts ?? r.time ?? r.Time ?? r.timestamp ?? '';
+          let ts;
+          if (typeof rawTs === 'number') {
+            ts = new Date(rawTs).toISOString();
+          } else if (typeof rawTs === 'string') {
+            const d = new Date(rawTs);
+            ts = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+          } else {
+            ts = new Date().toISOString();
+          }
 
-/* Listener para reconhecimento de alertas */
+          const mote = r.mote ?? (r.node_id ? 'MOTE' + r.node_id : r.node ?? 'MOTE' + index);
+          const protocol = r.protocol ?? r.protocolo ?? 'Unknown';
+          const event = r.event ?? r.evento ?? 'Normal';
+          const source = r.source ?? r.origem ?? 'Mote';
+
+          const packetLoss = Number(r.packetLoss ?? r.perda_pacotes ?? r.perda ?? 0) || 0;
+          const jitter = Number(r.jitter ?? 0) || 0;
+          const rssi = Number(r.rssi ?? 0) || 0;
+          const cpu = Number(r.cpu ?? 0) || 0;
+          const ram = Number(r.ram ?? 0) || 0;
+          const energy = Number(r.energy ?? r.consumo_energia ?? 0) || 0;
+
+          return {
+            ts,
+            mote,
+            protocol,
+            event,
+            packetLoss,
+            jitter,
+            rssi,
+            cpu,
+            ram,
+            temperature,
+            energy,
+            source,
+          };
+        });
+        
+        console.log('✅ Dados normalizados:', window.DATA.length, 'registros');
+        console.log('📄 Exemplo de registro normalizado:', window.DATA[0]);
+        
+        // Popula filtros e renderiza
+        populateFiltersFromData();
+        renderAll();
+      },
+      (err) => {
+        console.error('❌ Erro ao ler Firebase:', err);
+        console.log('💡 Verifique:');
+        console.log('   1. Configuração do Firebase em firebase-config.js');
+        console.log('   2. Regras de segurança do Realtime Database');
+        console.log('   3. Caminho dos dados (atual: "' + path + '")');
+      }
+    );
+  } catch (err) {
+    console.error('❌ Erro ao assinar Firebase:', err);
+  }
+}
+
+/* ==========================
+   NAVEGAÇÃO ENTRE ABAS
+   ========================== */
+
+// Adiciona listeners para navegação entre abas
+tabs.forEach((tab) => {
+  tab.addEventListener('click', () => {
+    const key = tab.dataset.tab;
+    tabs.forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    Object.keys(pages).forEach((k) => {
+      pages[k].style.display = k === key ? 'flex' : 'none';
+    });
+    renderActiveTab();
+  });
+});
+
+/* ==========================
+   LISTENERS DE EVENTOS
+   ========================== */
+
+// Atualiza dados ao clicar em Atualizar
+refreshBtn.addEventListener('click', () => {
+  console.log('🔄 Botão atualizar clicado');
+  renderAll();
+});
+
+// Aplica filtros e atualiza gráficos ao mudar seleção
+const debouncedRender = debounce(renderAll, 300);
+[fMote, fProt, fSource, timeRange].forEach((el) =>
+  el.addEventListener('change', () => {
+    console.log('🔍 Filtro alterado');
+    debouncedRender();
+  })
+);
+
+// Renderiza série e KPIs do dispositivo selecionado
+selMoteDet.addEventListener('change', () => {
+  console.log('📱 Dispositivo selecionado:', selMoteDet.value);
+  renderDeviceSeries(selMoteDet.value);
+  renderDeviceKpis(selMoteDet.value);
+  renderDeviceLogs(selMoteDet.value);
+});
+
+// Listener para reconhecimento de alertas
 document.getElementById('ackAll').addEventListener('click', () => {
-  alert('Todos os alertas foram reconhecidos (feature simulada)');
+  console.log('✅ Alertas reconhecidos');
+  alert('Todos os alertas foram reconhecidos');
 });
 
 /* ==========================
    INICIALIZAÇÃO
    ========================== */
 
-// Renderiza todos os dados ao iniciar
- // Inicia assinatura do Firebase (nó padrão: 'Sheet1').
- // Altere o path se seus dados estiverem em outro nó (ex: 'readings' ou '/').
- try {
-   subscribeFirebase('Sheet1');
- } catch (err) {
-   console.warn('subscribeFirebase: não foi possível assinar automaticamente', err);
- }
+console.log('🚀 Inicializando Dashboard IIoT...');
 
- renderAll();
+// Inicia assinatura do Firebase
+// IMPORTANTE: Altere o path se seus dados estiverem em outro nó
+// Exemplos: '/', 'data', 'readings', 'metrics', etc.
+try {
+  subscribeFirebase('logs');
+} catch (err) {
+  console.error('❌ Erro ao inicializar Firebase:', err);
+}
 
-/* Log de inicialização */
+// Renderiza interface inicial (mesmo sem dados)
+renderSimImage();
+
 console.log('✅ Dashboard IIoT carregado');
-console.log(`📊 ${DATA.length} registros`);
-
+console.log('📊 Aguardando dados do Firebase...');

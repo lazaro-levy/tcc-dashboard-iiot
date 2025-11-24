@@ -340,3 +340,44 @@ footer {
     padding: 6px 8px;
   }
 }
+
+/* ===========================
+   TOPOLOGIA DA REDE
+   =========================== */
+
+#simImage {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#simImage svg {
+  display: block;
+}
+
+/* Botões de controle para topologia */
+.topology-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.topology-btn {
+  background: rgba(20, 27, 28, 0.8);
+  border: 1px solid var(--accent3);
+  color: var(--accent3);
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s;
+}
+
+.topology-btn:hover {
+  background: var(--accent3);
+  color: var(--bg);
+}

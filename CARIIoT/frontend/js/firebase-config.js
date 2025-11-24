@@ -9,14 +9,14 @@ import { getDatabase } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDNXbnKnqtPDf8qooP1QbNUZiaB1_nnU28",
-  authDomain: "ttesteiiot.firebaseapp.com",
-  databaseURL: "https://ttesteiiot-default-rtdb.firebaseio.com",
-  projectId: "ttesteiiot",
-  storageBucket: "ttesteiiot.firebasestorage.app",
-  messagingSenderId: "409552243589",
-  appId: "1:409552243589:web:cff0bf04598995e28812ec",
-  measurementId: "G-5MV5VPG3VF"
+  apiKey: "AIzaSyBpVa5Lz50VFufUxQjiXM9ijLBj5pNkX0o",
+  authDomain: "cariiot.firebaseapp.com",
+  databaseURL: "https://cariiot-default-rtdb.firebaseio.com/",
+  projectId: "cariiot",
+  storageBucket: "cariiot.firebasestorage.app",
+  messagingSenderId: "997696975740",
+  appId: "1:997696975740:web:eb0bfcd79e5e2e41612af9",
+  measurementId: "G-BECGM1P3KH"
 };
 
 // Initialize Firebase

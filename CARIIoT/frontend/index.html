@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -35,7 +35,6 @@
       <nav class="tabs-sidebar" role="tablist" aria-label="Abas">
         <button class="tab active" data-tab="resumo" role="tab" aria-selected="true">Resumo</button>
         <button class="tab" data-tab="dispositivos" role="tab">Dispositivos</button>
-        <button class="tab" data-tab="infra" role="tab">Infra / Host</button>
         <button class="tab" data-tab="eventos" role="tab">Eventos & Alertas</button>
         <button class="tab" data-tab="tendencias" role="tab">Tendências & Análises</button>
         <button class="tab" data-tab="config" role="tab">Configuração</button>
@@ -48,7 +47,7 @@
           <option value="5">5 minutos</option>
           <option value="15" selected>15 minutos</option>
           <option value="60">1 hora</option>
-          <option value="1440">24 horas</option>
+          <option value="1440000000">24 horas</option>
         </select>
 
         <label class="small" for="filterMote">Dispositivo (Mote)</label>
@@ -65,11 +64,9 @@
         <select id="filterSource" aria-label="Todas as Origens">
           <option value="">Todas as Origens</option>
           <option value="Mote">Mote</option>
-          <option value="Host">Host</option>
         </select>
 
         <button id="refreshBtn" title="Recarregar">🔄 Atualizar</button>
-        <input type="file" id="fileInput" style="display:none">
       </div>
     </aside>
 
@@ -89,8 +86,7 @@
               <div class="value mono" id="kpiJitter" style="color:var(--text)">—</div>
             </div>
             <div class="kpi">
-              <div class="label">CPU Host - Média (%)</div>
-              <div class="value mono" id="kpiCpuHost" style="color:var(--text)">—</div>
+              <div class="label">Temperatura (°C)</div>
             </div>
             <div class="kpi">
               <div class="label">CPU Mote - Média (%)</div>
@@ -119,38 +115,9 @@
             </div>
 
             <div class="card" style="width:360px; min-width:320px; display:flex; flex-direction:column;">
-              <strong>Imagem da Simulação</strong>
+              <strong>Topologia</strong>
               <div style="height:200px; margin-top:8px; border-radius:8px; overflow:hidden; background:var(--bg2); display:flex; align-items:center; justify-content:center;">
-                <img id="simImage" alt="Simulação" style="width:100%; height:auto; object-fit:contain;">
-              </div>
-              <strong style="margin-top:8px">Feed de Eventos</strong>
-              <div style="max-height:160px; overflow:auto; margin-top:6px;">
-                <table id="eventsFeed" aria-label="Feed de eventos">
-                  <thead>
-                    <tr>
-                      <th>Hora</th>
-                      <th>Mote</th>
-                      <th>Evento</th>
-                      <th>Perda</th>
-                    </tr>
-                  </thead>
-                  <tbody></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- Heatmap e gráfico de top -->
-          <div style="display:flex; gap:12px; margin-top:8px;">
-            <div class="card" style="flex:1;">
-              <strong>Heatmap MoteID × Hora</strong>
-              <div class="small">Perda de Pacotes % (média por hora)</div>
-              <div id="heatmapArea" style="margin-top:8px"></div>
-            </div>
-            <div class="card" style="width:360px;">
-              <strong>Distribuição / Top N</strong>
-              <div style="height:180px; margin-top:8px;">
-                <canvas id="topChart"></canvas>
+                <div id="simImage" style="width:100%; height:100%;"></div>
               </div>
             </div>
           </div>
@@ -169,6 +136,7 @@
                     <th>Perda</th>
                     <th>Jitter</th>
                     <th>RSSI</th>
+                    <th>Severidade</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -195,18 +163,6 @@
           <div class="card"><strong>Séries por Mote</strong><div style="height:260px; margin-top:8px;"><canvas id="deviceSeries"></canvas></div></div>
           <div class="card"><strong>Logs do Mote</strong><div style="max-height:220px; overflow:auto; margin-top:8px;"><table id="deviceLogs"><thead><tr><th>Data/Hora</th><th>Evento</th><th>Perda</th><th>Jitter</th></tr></thead><tbody></tbody></table></div></div>
         </section>
-        <!-- ABA INFRA -->
-        <section id="page-infra" class="col wide" aria-label="Infra / Host" style="display:none; flex-direction:column; flex:1;">
-          <div class="card"><strong>INFRA / HOST</strong><div class="small">Métricas do ambiente que executa a simulação</div></div>
-          <div class="card kpis">
-            <div class="kpi"><div class="label">CPU Host Média (%)</div><div class="value mono" id="infra_cpu">—</div></div>
-            <div class="kpi"><div class="label">RAM Host Média (%)</div><div class="value mono" id="infra_ram">—</div></div>
-            <div class="kpi"><div class="label">Disco I/O (MB/s)</div><div class="value mono" id="infra_disk">—</div></div>
-            <div class="kpi"><div class="label">Rede (MB/s)</div><div class="value mono" id="infra_net">—</div></div>
-          </div>
-          <div class="card"><strong>Série Host (CPU / RAM)</strong><div style="height:260px; margin-top:8px;"><canvas id="hostSeries"></canvas></div></div>
-          <div class="card"><strong>Top Processos / Containers</strong><div style="height:300px; margin-top:8px;"><canvas id="topProcesses"></canvas></div></div>
-        </section>
         <!-- ABA EVENTOS -->
         <section id="page-eventos" class="col wide" aria-label="Eventos & Alertas" style="display:none; flex-direction:column;">
           <div class="card" style="display:flex; justify-content:space-between; align-items:center;"><div><strong>EVENTOS & ALERTAS</strong><div class="small">Linha do tempo e severidade</div></div><div><button id="ackAll">Acknowledge All</button></div></div>
@@ -215,11 +171,7 @@
         </section>
         <!-- ABA TENDÊNCIAS -->
         <section id="page-tendencias" class="col wide" aria-label="Tendências & Análises" style="display:none; flex-direction:column;">
-          <div class="card"><strong>TENDÊNCIAS & ANÁLISES</strong><div class="small">Heatmaps, percentis e correlações</div></div>
-          <div style="display:flex; gap:12px; margin-top:8px;">
-            <div class="card" style="flex:1;"><strong>Heatmap Detalhado</strong><div id="heatmapBig" style="margin-top:8px"></div></div>
-            <div class="card" style="width:420px;"><strong>RSSI vs Perda de Pacotes</strong><div style="height:300px;margin-top:8px;"><canvas id="scatterChart"></canvas></div></div>
-          </div>
+          <div class="card"><strong>TENDÊNCIAS & ANÁLISES</strong><div class="small">Percentuais e correlações</div></div>
           <div class="card" style="margin-top:8px;"><strong>Comparativo Janela</strong><div style="height:220px;margin-top:8px;"><canvas id="compareChart"></canvas></div></div>
         </section>
         <!-- ABA CONFIG -->
@@ -230,10 +182,7 @@
             <tbody>
               <tr><td>Perda de Pacotes</td><td>% ou fração</td><td>Mote</td></tr>
               <tr><td>Jitter</td><td>ms</td><td>Mote</td></tr>
-              <tr><td>CPU</td><td>%</td><td>Host / Mote</td></tr>
-              <tr><td style="color:var(--muted)">Push Gateway</td><td></td><td></td></tr>
-              <tr><td style="color:var(--muted)">Prometheus</td><td></td><td></td></tr>
-              <tr><td style="color:var(--muted)">InfluxDB</td><td></td><td></td></tr>
+              <tr><td>CPU</td><td>%</td><td>Mote</td></tr>
             </tbody></table>
           </div>
           <div class="card" style="margin-top:8px"><strong>Thresholds (exemplo)</strong>
