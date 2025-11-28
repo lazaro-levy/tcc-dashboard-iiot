@@ -2,17 +2,21 @@
    CONFIGURAÇÃO E DADOS
    ====================== */
 
-// Variável global para armazenar os dados carregados do Firebase
-window.DATA = [];
-
-// Função debounce - evita execuções rápidas demais
-function debounce(func, wait) {
-  let timeout;
-  return function (...args) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-}
+// Variável global para armazenar os dados do frigorífico
+window.DATA = {
+  fisico: { bomba: 'OFF', nivel: 0, temperatura: 0 },
+  virtual: {
+    monitoramento: {
+      ataque: { duracao: 0 },
+      sistema: { cpu: 0, memoria: 0 },
+      status: 'NORMAL',
+      timestamp: Date.now(),
+      trafego: { msgs_invalidas: 0, pacotes_rede: 0, taxa_msgs: 0 }
+    },
+    operacional: { bomba: 'OFF', nivel: 0, temperatura: 0 }
+  },
+  historico: []
+};
 
 /* ======================
    FIREBASE
@@ -25,944 +29,774 @@ import { ref, onValue } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase
    REFERÊNCIAS DO DOM
    ========================= */
 
-// Seletores dos elementos principais
 const tabs = document.querySelectorAll('.tab');
 const pages = {
-  resumo: document.getElementById('page-resumo'),
-  dispositivos: document.getElementById('page-dispositivos'),
-  eventos: document.getElementById('page-eventos'),
-  tendencias: document.getElementById('page-tendencias'),
-  config: document.getElementById('page-config'),
+  'visao-geral': document.getElementById('page-visao-geral'),
+  'tendencias': document.getElementById('page-tendencias')
 };
-const fMote = document.getElementById('filterMote');
-const fProt = document.getElementById('filterProtocol');
-const fSource = document.getElementById('filterSource');
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
 const timeRange = document.getElementById('timeRange');
 const refreshBtn = document.getElementById('refreshBtn');
-const selMoteDet = document.getElementById('selectMoteDetails');
 
 /* ==========================
-   POPULAÇÃO DE FILTROS
+   SIDEBAR RETRÁTIL
    ========================== */
 
-// Função para popular filtros com base nos dados
-function populateFiltersFromData() {
-  console.log('🔄 Populando filtros com', window.DATA.length, 'registros');
-  
-  const motes = Array.from(new Set(window.DATA.map((d) => d.mote))).sort();
-  const prots = Array.from(new Set(window.DATA.map((d) => d.protocol))).sort();
-
-  console.log('📊 Motes encontrados:', motes);
-  console.log('📊 Protocolos encontrados:', prots);
-
-  fMote.innerHTML = '<option value="">Todos os Motes</option>';
-  selMoteDet.innerHTML = '';
-
-  for (const m of motes) {
-    fMote.appendChild(
-      Object.assign(document.createElement('option'), {
-        value: m,
-        textContent: m,
-      })
-    );
-    selMoteDet.appendChild(
-      Object.assign(document.createElement('option'), {
-        value: m,
-        textContent: m,
-      })
-    );
-  }
-  fProt.innerHTML = '<option value="">Todos os Protocolos</option>';
-  for (const p of prots) {
-    fProt.appendChild(
-      Object.assign(document.createElement('option'), {
-        value: p,
-        textContent: p,
-      })
-    );
-  }
-}
+sidebarToggle.addEventListener('click', () => {
+  sidebar.classList.toggle('expanded');
+});
 
 /* ==========================
    INSTÂNCIAS DE GRÁFICOS
    ========================== */
-let timeChart = null,
-  topChart = null,
-  deviceSeries = null,
-  compareChart = null;
+let tempChart = null;
+let resourceChart = null;
+let tempCompareChart = null;
+let resourceCompareChart = null;
+let msgRateChart = null;
+let eventAnalysisChart = null;
 
 /* ==========================
-   FUNÇÕES DE AGREGACAO E FILTRO
+   FUNÇÃO AUXILIAR PARA CORES
    ========================== */
 
-// Aplica filtros dos controles a window.DATA
-function applyFilters(data) {
-  const moteFilter = fMote.value;
-  const protFilter = fProt.value;
-  const srcFilter = fSource.value;
-  const minutes = parseInt(timeRange.value, 10) || 15;
-  const since = Date.now() - minutes * 60000;
-  
-  const filtered = data.filter((d) => {
-    const t = new Date(d.ts).getTime();
-    if (t < since) return false;
-    if (moteFilter && d.mote !== moteFilter) return false;
-    if (protFilter && d.protocol !== protFilter) return false;
-    if (srcFilter && d.source !== srcFilter) return false;
-    return true;
-  });
-  
-  console.log('🔍 Filtros aplicados:', { moteFilter, protFilter, srcFilter, minutes });
-  console.log('📊 Dados filtrados:', filtered.length, 'de', data.length, 'registros');
-  
-  return filtered;
-}
-
-// KPIs agregados do último timestamp
-function aggLatest(filtered) {
-  if (filtered.length === 0) return {};
-  const lastTs = filtered[filtered.length - 1].ts;
-  const rows = filtered.filter((r) => r.ts === lastTs);
-  const loss = rows.reduce((s, r) => s + (r.packetLoss || 0), 0) / rows.length;
-  const jitter = rows.reduce((s, r) => s + (r.jitter || 0), 0) / rows.length;
-  const cpuMoteRows = filtered.filter((r) => r.source === 'Mote');
-  const cpuMote =
-    cpuMoteRows.length > 0
-      ? cpuMoteRows.reduce((s, r) => s + (r.cpu || 0), 0) / cpuMoteRows.length
-      : 0;
-  const energy = filtered.reduce((s, r) => s + (r.energy || 0), 0) / filtered.length;
-  const eventRate = filtered.filter(
-    (r) => r.event !== 'Normal' && new Date(r.ts) > new Date(Date.now() - 60000)
-  ).length;
-  return { loss, jitter, cpuMote, energy, eventRate };
-}
-
-// Agregação para gráficos de séries
-function aggregateForChart(filtered) {
-  const buckets = {};
-  filtered.forEach((d) => {
-    const t = new Date(d.ts);
-    const key = new Date(
-      t.getFullYear(),
-      t.getMonth(),
-      t.getDate(),
-      t.getHours(),
-      t.getMinutes()
-    ).toISOString();
-    if (!buckets[key]) buckets[key] = { loss: 0, jitter: 0, count: 0 };
-    buckets[key].loss += d.packetLoss;
-    buckets[key].jitter += d.jitter;
-    buckets[key].count++;
-  });
-  const labels = Object.keys(buckets).sort();
-  return {
-    labels: labels.map((l) => new Date(l).toLocaleTimeString()),
-    loss: labels.map((k) => buckets[k].loss / buckets[k].count),
-    jitter: labels.map((k) => buckets[k].jitter / buckets[k].count),
-  };
-}
-
-/* ==========================
-   FUNÇÕES DE RENDERIZAÇÃO
-   ========================== */
-
-// Função auxiliar para pegar cor do tema
 function themeColor(key) {
   return getComputedStyle(document.documentElement).getPropertyValue(key).trim();
 }
 
-// Renderiza KPIs principais
+/* ==========================
+   FUNÇÕES DE RENDERIZAÇÃO - KPIs
+   ========================== */
+
 function renderKPIs() {
   console.log('📊 Renderizando KPIs...');
-  const f = applyFilters(window.DATA);
-  const a = aggLatest(f);
-  document.getElementById('kpiPacketLoss').textContent =
-    a.loss === undefined ? '—' : (a.loss * 100).toFixed(2) + '%';
-  document.getElementById('kpiJitter').textContent =
-    a.jitter === undefined ? '—' : Math.round(a.jitter) + ' ms';
-  document.getElementById('kpiCpuMote').textContent =
-    a.cpuMote ? Math.round(a.cpuMote) + '%' : '—';
-  document.getElementById('kpiEnergy').textContent =
-    a.energy ? Math.round(a.energy) + ' mW' : '—';
-  document.getElementById('kpiEventRate').textContent =
-    a.eventRate !== undefined ? a.eventRate + ' /min' : '—';
+  
+  const { fisico, virtual } = window.DATA;
+  const { monitoramento } = virtual;
+  
+  // Temperatura
+  const tempElement = document.querySelector('#kpiTemperatura span:first-child');
+  const tempIndicator = document.querySelector('#kpiTemperatura .status-indicator');
+  tempElement.textContent = fisico.temperatura.toFixed(1);
+  
+  if (fisico.temperatura < 5) {
+    tempIndicator.className = 'status-indicator status-ok';
+  } else if (fisico.temperatura < 10) {
+    tempIndicator.className = 'status-indicator status-warning';
+  } else {
+    tempIndicator.className = 'status-indicator status-critical';
+  }
+  
+  // Nível
+  const nivelElement = document.querySelector('#kpiNivel span:first-child');
+  const nivelIndicator = document.querySelector('#kpiNivel .status-indicator');
+  nivelElement.textContent = (fisico.nivel * 100).toFixed(0);
+  
+  if (fisico.nivel > 0.7) {
+    nivelIndicator.className = 'status-indicator status-ok';
+  } else if (fisico.nivel > 0.3) {
+    nivelIndicator.className = 'status-indicator status-warning';
+  } else {
+    nivelIndicator.className = 'status-indicator status-critical';
+  }
+  
+  // Bomba
+  const bombaElement = document.querySelector('#kpiBomba span:first-child');
+  const bombaIndicator = document.querySelector('#kpiBomba .status-indicator');
+  bombaElement.textContent = fisico.bomba;
+  bombaIndicator.className = fisico.bomba === 'ON' 
+    ? 'status-indicator status-ok' 
+    : 'status-indicator status-warning';
+  
+  // CPU
+  const cpuElement = document.querySelector('#kpiCpu span:first-child');
+  const cpuIndicator = document.querySelector('#kpiCpu .status-indicator');
+  cpuElement.textContent = monitoramento.sistema.cpu.toFixed(1);
+  
+  if (monitoramento.sistema.cpu < 50) {
+    cpuIndicator.className = 'status-indicator status-ok';
+  } else if (monitoramento.sistema.cpu < 80) {
+    cpuIndicator.className = 'status-indicator status-warning';
+  } else {
+    cpuIndicator.className = 'status-indicator status-critical';
+  }
+  
+  // Memória
+  const memElement = document.querySelector('#kpiMemoria span:first-child');
+  const memIndicator = document.querySelector('#kpiMemoria .status-indicator');
+  memElement.textContent = monitoramento.sistema.memoria.toFixed(1);
+  
+  if (monitoramento.sistema.memoria < 60) {
+    memIndicator.className = 'status-indicator status-ok';
+  } else if (monitoramento.sistema.memoria < 85) {
+    memIndicator.className = 'status-indicator status-warning';
+  } else {
+    memIndicator.className = 'status-indicator status-critical';
+  }
+  
+  // Status
+  const statusElement = document.querySelector('#kpiStatus span:first-child');
+  const statusIndicator = document.querySelector('#kpiStatus .status-indicator');
+  statusElement.textContent = monitoramento.status;
+  
+  if (monitoramento.status === 'NORMAL') {
+    statusIndicator.className = 'status-indicator status-ok';
+  } else if (monitoramento.status.includes('ALERTA')) {
+    statusIndicator.className = 'status-indicator status-warning';
+  } else {
+    statusIndicator.className = 'status-indicator status-critical';
+  }
 }
 
-// Renderiza gráfico de séries temporais (PacketLoss/Jitter)
-function renderTimeSeries() {
-  console.log('📈 Renderizando série temporal...');
-  const f = applyFilters(window.DATA);
-  const s = aggregateForChart(f);
-  const ctx = document.getElementById('timeChart').getContext('2d');
-  if (timeChart) {
-    let changed = false;
-    if (JSON.stringify(timeChart.data.labels) !== JSON.stringify(s.labels)) {
-      timeChart.data.labels = s.labels;
-      changed = true;
-    }
-    if (
-      JSON.stringify(timeChart.data.datasets[0].data) !==
-      JSON.stringify(s.loss.map((x) => x * 100))
-    ) {
-      timeChart.data.datasets[0].data = s.loss.map((x) => x * 100);
-      changed = true;
-    }
-    if (JSON.stringify(timeChart.data.datasets[1].data) !== JSON.stringify(s.jitter)) {
-      timeChart.data.datasets[1].data = s.jitter;
-      changed = true;
-    }
-    if (changed) timeChart.update();
+/* ==========================
+   GRÁFICO DE TEMPERATURA
+   ========================== */
+
+function renderTempChart() {
+  console.log('🌡️ Renderizando gráfico de temperatura...');
+  
+  const hist = window.DATA.historico.slice(-60);
+  const labels = hist.map(h => new Date(h.timestamp).toLocaleTimeString());
+  const temps = hist.map(h => h.temperatura);
+  
+  const ctx = document.getElementById('tempChart').getContext('2d');
+  
+  if (tempChart) {
+    tempChart.data.labels = labels;
+    tempChart.data.datasets[0].data = temps;
+    tempChart.update();
   } else {
-    timeChart = new Chart(ctx, {
+    tempChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: s.labels,
-        datasets: [
-          {
-            label: 'Perda de Pacotes %',
-            data: s.loss.map((x) => x * 100),
-            borderColor: themeColor('--accent2'),
-            backgroundColor: 'rgba(250,164,92,0.09)',
-            yAxisID: 'A',
-            tension: 0.25,
-          },
-          {
-            label: 'Jitter ms',
-            data: s.jitter,
-            borderColor: themeColor('--accent3'),
-            backgroundColor: 'rgba(115,176,186,0.13)',
-            yAxisID: 'B',
-            tension: 0.25,
-          },
-        ],
+        labels: labels,
+        datasets: [{
+          label: 'Temperatura (°C)',
+          data: temps,
+          borderColor: themeColor('--accent2'),
+          backgroundColor: 'rgba(250,164,92,0.1)',
+          tension: 0.4,
+          fill: true
+        }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        scales: {
-          A: { position: 'left', ticks: { color: themeColor('--accent2') } },
-          B: { position: 'right', ticks: { color: themeColor('--accent3') } },
+        plugins: {
+          legend: { display: true, labels: { color: themeColor('--text') } }
         },
-      },
-    });
-  }
-}
-
-// Renderiza gráfico de barras dos motes com maior perda
-function renderTopChart() {
-  console.log('📊 Renderizando top chart...');
-  const f = applyFilters(window.DATA);
-  const agg = {};
-  f.forEach((d) => (agg[d.mote] = (agg[d.mote] || 0) + d.packetLoss));
-  const items = Object.entries(agg)
-    .map(([k, v]) => ({
-      k,
-      v: v / Math.max(1, f.filter((x) => x.mote === k).length),
-    }))
-    .sort((a, b) => b.v - a.v);
-  const labels = items.slice(0, 6).map((i) => i.k);
-  const values = items.slice(0, 6).map((i) => i.v * 100);
-  const ctx = document.getElementById('topChart').getContext('2d');
-  if (topChart) {
-    let changed = false;
-    if (JSON.stringify(topChart.data.labels) !== JSON.stringify(labels)) {
-      topChart.data.labels = labels;
-      changed = true;
-    }
-    if (JSON.stringify(topChart.data.datasets[0].data) !== JSON.stringify(values)) {
-      topChart.data.datasets[0].data = values;
-      changed = true;
-    }
-    if (changed) topChart.update();
-  } else {
-    topChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: 'Perda de Pacotes % (média)',
-            data: values,
-            backgroundColor: themeColor('--accent2'),
+        scales: {
+          y: { 
+            ticks: { color: themeColor('--muted') },
+            grid: { color: themeColor('--glass') }
           },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-      },
+          x: { 
+            ticks: { color: themeColor('--muted') },
+            grid: { color: themeColor('--glass') }
+          }
+        }
+      }
     });
   }
 }
 
-// Renderiza série de dispositivo selecionado
-function renderDeviceSeries(mote) {
-  console.log('📈 Renderizando série do dispositivo:', mote);
-  const f = applyFilters(window.DATA).filter((d) => d.mote === mote);
-  const s = f.slice(-120);
-  const labels = s.map((x) => new Date(x.ts).toLocaleTimeString());
-  const loss = s.map((x) => x.packetLoss * 100);
-  const jitter = s.map((x) => x.jitter);
-  const ctx = document.getElementById('deviceSeries').getContext('2d');
-  if (deviceSeries) {
-    let changed = false;
-    if (JSON.stringify(deviceSeries.data.labels) !== JSON.stringify(labels)) {
-      deviceSeries.data.labels = labels;
-      changed = true;
-    }
-    if (JSON.stringify(deviceSeries.data.datasets[0].data) !== JSON.stringify(loss)) {
-      deviceSeries.data.datasets[0].data = loss;
-      changed = true;
-    }
-    if (JSON.stringify(deviceSeries.data.datasets[1].data) !== JSON.stringify(jitter)) {
-      deviceSeries.data.datasets[1].data = jitter;
-      changed = true;
-    }
-    if (changed) deviceSeries.update();
+/* ==========================
+   GRÁFICO DE RECURSOS
+   ========================== */
+
+function renderResourceChart() {
+  console.log('💻 Renderizando gráfico de recursos...');
+  
+  const hist = window.DATA.historico.slice(-60);
+  const labels = hist.map(h => new Date(h.timestamp).toLocaleTimeString());
+  const cpu = hist.map(h => h.cpu);
+  const memoria = hist.map(h => h.memoria);
+  
+  const ctx = document.getElementById('resourceChart').getContext('2d');
+  
+  if (resourceChart) {
+    resourceChart.data.labels = labels;
+    resourceChart.data.datasets[0].data = cpu;
+    resourceChart.data.datasets[1].data = memoria;
+    resourceChart.update();
   } else {
-    deviceSeries = new Chart(ctx, {
+    resourceChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels,
+        labels: labels,
         datasets: [
           {
-            label: 'Perda de Pacotes %',
-            data: loss,
-            borderColor: themeColor('--accent2'),
-            backgroundColor: 'rgba(250,164,92,0.09)',
-            tension: 0.25,
+            label: 'CPU (%)',
+            data: cpu,
+            borderColor: themeColor('--accent'),
+            backgroundColor: 'rgba(93,227,250,0.1)',
+            tension: 0.4
           },
           {
-            label: 'Jitter ms',
-            data: jitter,
+            label: 'Memória (%)',
+            data: memoria,
             borderColor: themeColor('--accent3'),
-            backgroundColor: 'rgba(115,176,186,0.13)',
-            tension: 0.25,
-          },
-        ],
+            backgroundColor: 'rgba(115,176,186,0.1)',
+            tension: 0.4
+          }
+        ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-      },
+        plugins: {
+          legend: { display: true, labels: { color: themeColor('--text') } }
+        },
+        scales: {
+          y: { 
+            ticks: { color: themeColor('--muted') },
+            grid: { color: themeColor('--glass') },
+            max: 100
+          },
+          x: { 
+            ticks: { color: themeColor('--muted') },
+            grid: { color: themeColor('--glass') }
+          }
+        }
+      }
     });
   }
 }
 
-// Renderiza KPIs do dispositivo selecionado
-function renderDeviceKpis(mote) {
-  const rows = applyFilters(window.DATA).filter((d) => d.mote === mote);
-  if (rows.length === 0) {
-    ['d_kpi_loss', 'd_kpi_jitter', 'd_kpi_rssi', 'd_kpi_cpu', 'd_kpi_ram'].forEach(
-      (id) => (document.getElementById(id).textContent = '—')
-    );
-    return;
-  }
-  const last = rows[rows.length - 1];
-  document.getElementById('d_kpi_loss').textContent = (last.packetLoss * 100).toFixed(2) + '%';
-  document.getElementById('d_kpi_jitter').textContent = Math.round(last.jitter) + ' ms';
-  document.getElementById('d_kpi_rssi').textContent =
-    Math.round(rows.reduce((s, r) => s + r.rssi, 0) / rows.length) + ' dBm';
-  document.getElementById('d_kpi_cpu').textContent =
-    Math.round(rows.reduce((s, r) => s + r.cpu, 0) / rows.length) + '%';
-  document.getElementById('d_kpi_ram').textContent =
-    Math.round(rows.reduce((s, r) => s + r.ram, 0) / rows.length) + '%';
-}
+/* ==========================
+   TABELA DE LOGS
+   ========================== */
 
-// Renderiza tabela de logs do dispositivo selecionado
-function renderDeviceLogs(mote) {
-  console.log('📋 Renderizando logs do dispositivo:', mote);
-  const rows = applyFilters(window.DATA).filter((d) => d.mote === mote).slice(-100).reverse();
-  const tbody = document.querySelector('#deviceLogs tbody');
-  tbody.innerHTML = '';
-  
-  if (rows.length === 0) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td colspan="4" style="text-align:center;color:' + themeColor('--muted') + '">Sem dados para este dispositivo</td>';
-    tbody.appendChild(tr);
-    return;
-  }
-  
-  rows.forEach((r) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="color:${themeColor('--muted')}">${new Date(r.ts).toLocaleString()}</td><td style="color:${
-      r.event === 'Normal'
-        ? themeColor('--accent3')
-        : r.event.includes('DoS')
-        ? themeColor('--danger')
-        : themeColor('--accent2')
-    }">${r.event}</td><td>${(r.packetLoss * 100).toFixed(2)}%</td><td>${Math.round(r.jitter)} ms</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-// Renderiza tabela de logs recentes na aba Resumo
 function renderLatestLogs() {
-  console.log('📋 Renderizando logs recentes...');
-  const rows = applyFilters(window.DATA).slice(-100).reverse();
+  console.log('📋 Renderizando logs...');
+  
   const tbody = document.querySelector('#latestTable tbody');
   tbody.innerHTML = '';
-
-  if (rows.length === 0) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="8" style="text-align:center;color:${themeColor('--muted')}">Nenhum registro de log encontrado para os filtros atuais.</td>`;
-    tbody.appendChild(tr);
+  
+  const logs = window.DATA.historico.slice(-50).reverse();
+  
+  if (logs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:' + themeColor('--muted') + '">Aguardando dados...</td></tr>';
     return;
   }
-
-  rows.forEach((r) => {
+  
+  logs.forEach(log => {
     const tr = document.createElement('tr');
-    const severityColor = r.event.includes('DoS') ? themeColor('--danger') : (r.packetLoss > 0.05 ? themeColor('--accent2') : themeColor('--text'));
-    const severityText = r.event.includes('DoS') ? 'Crítica' : (r.packetLoss > 0.05 ? 'Atenção' : 'Normal');
-
+    const statusColor = log.status === 'NORMAL' ? themeColor('--accent3') : themeColor('--danger');
+    
     tr.innerHTML = `
-      <td style="color:${themeColor('--muted')}">${new Date(r.ts).toLocaleString()}</td>
-      <td>${r.mote}</td>
-      <td>${r.protocol}</td>
-      <td>${r.event}</td>
-      <td>${(r.packetLoss * 100).toFixed(2)}%</td>
-      <td>${Math.round(r.jitter)} ms</td>
-      <td>${r.rssi} dBm</td>
-      <td style="color:${severityColor}">${severityText}</td>
+      <td style="color:${themeColor('--muted')}">${new Date(log.timestamp).toLocaleString()}</td>
+      <td style="color:${statusColor}">${log.status}</td>
+      <td>${log.temperatura.toFixed(1)}°C</td>
+      <td>${(log.nivel * 100).toFixed(0)}%</td>
+      <td>${log.bomba}</td>
+      <td>${log.cpu.toFixed(1)}%</td>
+      <td>${log.memoria.toFixed(1)}%</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-// Renderiza timeline de eventos
-function renderTimeline() {
-  console.log('⏰ Renderizando timeline...');
-  const f = applyFilters(window.DATA).filter((d) => d.event !== 'Normal').slice(-200).reverse();
-  const tbody = document.querySelector('#timelineTable tbody');
-  tbody.innerHTML = '';
-  f.forEach((r) => {
-    const tr = document.createElement('tr');
-    tr.style.cursor = 'pointer';
-    tr.innerHTML = `<td style="color:${themeColor('--muted')}">${new Date(
-      r.ts
-    ).toLocaleString()}</td><td>${r.mote}</td><td>${r.event}</td><td style="color:${
-      r.event.includes('DoS') ? themeColor('--danger') : themeColor('--accent2')
-    }">Alta</td>`;
-    tr.addEventListener('click', () => {
-      document.getElementById('eventDetails').innerHTML = `
-        <strong>Detalhes do Evento</strong><br>
-        <strong>Timestamp:</strong> ${new Date(r.ts).toLocaleString()}<br>
-        <strong>Mote:</strong> ${r.mote}<br>
-        <strong>Evento:</strong> ${r.event}<br>
-        <strong>Perda de Pacotes:</strong> ${(r.packetLoss * 100).toFixed(2)}%<br>
-        <strong>Jitter:</strong> ${r.jitter} ms<br>
-        <strong>RSSI:</strong> ${r.rssi} dBm<br>
-        <strong>Protocolo:</strong> ${r.protocol}
-      `;
-    });
-    tbody.appendChild(tr);
-  });
-}
+/* ==========================
+   TOPOLOGIA DO SISTEMA
+   ========================== */
 
-// Renderiza gráfico comparativo de janelas
-function renderCompare() {
-  console.log('📊 Renderizando comparativo...');
-  const labels = [];
-  const a = [], b = [];
-  const now = Date.now();
-  for (let i = 23; i >= 0; i--) {
-    labels.push(`${i}h`);
-    const startA = now - (i + 1) * 3600 * 1000;
-    const endA = now - i * 3600 * 1000;
-    const startB = now - (i + 25) * 3600 * 1000;
-    const endB = now - (i + 24) * 3600 * 1000;
-    const valsA = window.DATA.filter((d) => {
-      const t = new Date(d.ts).getTime();
-      return t >= startA && t < endA;
-    }).map((d) => d.packetLoss || 0);
-    const valsB = window.DATA.filter((d) => {
-      const t = new Date(d.ts).getTime();
-      return t >= startB && t < endB;
-    }).map((d) => d.packetLoss || 0);
-    const avgA = valsA.length ? valsA.reduce((s, v) => s + v, 0) / valsA.length : 0;
-    const avgB = valsB.length ? valsB.reduce((s, v) => s + v, 0) / valsB.length : 0;
-    a.push(avgA * 100);
-    b.push(avgB * 100);
-  }
-  const ctx = document.getElementById('compareChart').getContext('2d');
-  const datasets = [
-    {
-      label: 'Últimas 24h',
-      data: a,
-      borderColor: themeColor('--accent2'),
-      backgroundColor: 'rgba(250,164,92,0.10)',
-      tension: 0.25,
-    },
-    {
-      label: '24–48h',
-      data: b,
-      borderColor: themeColor('--accent3'),
-      backgroundColor: 'rgba(115,176,186,0.13)',
-      tension: 0.25,
-    },
-  ];
-  if (compareChart) {
-    let changed = false;
-    if (JSON.stringify(compareChart.data.labels) !== JSON.stringify(labels)) {
-      compareChart.data.labels = labels;
-      changed = true;
-    }
-    if (JSON.stringify(compareChart.data.datasets) !== JSON.stringify(datasets)) {
-      compareChart.data.datasets = datasets;
-      changed = true;
-    }
-    if (changed) compareChart.update();
-  } else {
-    compareChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: datasets,
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-      },
-    });
-  }
-}
-
-// Renderiza topologia interativa com D3.js
 function renderSimImage() {
   const container = document.getElementById('simImage');
   if (!container) return;
   
-  container.style.width = '100%';
-  container.style.height = '100%';
-  container.innerHTML = '';
+  const { fisico, virtual } = window.DATA;
+  const { monitoramento } = virtual;
   
-  const f = applyFilters(window.DATA);
-  const motes = Array.from(new Set(f.map(d => d.mote)));
+  // Cores baseadas no status
+  const tempColor = fisico.temperatura < 5 ? '#5DE3FA' : fisico.temperatura < 10 ? '#FAA45C' : '#ff6b6b';
+  const cpuColor = monitoramento.sistema.cpu < 50 ? '#5DE3FA' : monitoramento.sistema.cpu < 80 ? '#FAA45C' : '#ff6b6b';
+  const statusColor = monitoramento.status === 'NORMAL' ? '#5DE3FA' : '#FAA45C';
   
-  if (motes.length === 0) {
-    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#73B0BA;font-size:14px;">⏳ Aguardando dados da rede...</div>';
-    return;
-  }
-  
-  if (typeof d3 === 'undefined') {
-    console.warn('D3.js não disponível, usando SVG estático');
-    renderSimImageStatic();
-    return;
-  }
-  
-  // Criar wrapper para controles
-  const wrapper = document.createElement('div');
-  wrapper.style.position = 'relative';
-  wrapper.style.width = '100%';
-  wrapper.style.height = '100%';
-  container.appendChild(wrapper);
-  
-  // Adicionar botões de controle
-  const controls = document.createElement('div');
-  controls.className = 'topology-controls';
-  controls.innerHTML = `
-    <button class="topology-btn" onclick="resetTopologyZoom()">🔄 Reset Zoom</button>
-    <button class="topology-btn" onclick="toggleTopologyPhysics()">⚡ Física: ON</button>
+  const svg = `
+    <svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 800 400'>
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      <rect width='100%' height='100%' fill='#141b1c'/>
+      
+      <!-- Sistema Físico -->
+      <g transform="translate(150, 200)">
+        <circle cx="0" cy="0" r="60" fill="${tempColor}" opacity="0.2" filter="url(#glow)"/>
+        <circle cx="0" cy="0" r="50" fill="${tempColor}" opacity="0.9"/>
+        <text x="0" y="-10" fill="#141b1c" font-size="14" font-weight="bold" text-anchor="middle">FÍSICO</text>
+        <text x="0" y="10" fill="#141b1c" font-size="12" text-anchor="middle">Temp: ${fisico.temperatura.toFixed(1)}°C</text>
+        <text x="0" y="25" fill="#141b1c" font-size="11" text-anchor="middle">Nível: ${(fisico.nivel * 100).toFixed(0)}%</text>
+      </g>
+      
+      <!-- Sistema Virtual -->
+      <g transform="translate(650, 200)">
+        <circle cx="0" cy="0" r="60" fill="${cpuColor}" opacity="0.2" filter="url(#glow)"/>
+        <circle cx="0" cy="0" r="50" fill="${cpuColor}" opacity="0.9"/>
+        <text x="0" y="-10" fill="#141b1c" font-size="14" font-weight="bold" text-anchor="middle">VIRTUAL</text>
+        <text x="0" y="10" fill="#141b1c" font-size="12" text-anchor="middle">CPU: ${monitoramento.sistema.cpu.toFixed(1)}%</text>
+        <text x="0" y="25" fill="#141b1c" font-size="11" text-anchor="middle">MEM: ${monitoramento.sistema.memoria.toFixed(1)}%</text>
+      </g>
+      
+      <!-- Conexão -->
+      <line x1="210" y1="200" x2="590" y2="200" stroke="${statusColor}" stroke-width="3" opacity="0.6" stroke-dasharray="5,5">
+        <animate attributeName="stroke-dashoffset" from="0" to="10" dur="1s" repeatCount="indefinite"/>
+      </line>
+      
+      <!-- Monitor Central -->
+      <g transform="translate(400, 200)">
+        <rect x="-40" y="-30" width="80" height="60" rx="8" fill="${statusColor}" opacity="0.9"/>
+        <text x="0" y="-5" fill="#141b1c" font-size="11" font-weight="bold" text-anchor="middle">MONITOR</text>
+        <text x="0" y="15" fill="#141b1c" font-size="10" text-anchor="middle">${monitoramento.status}</text>
+      </g>
+      
+      <!-- Bomba -->
+      <g transform="translate(150, 80)">
+        <circle cx="0" cy="0" r="25" fill="${fisico.bomba === 'ON' ? '#5DE3FA' : '#696B7A'}" opacity="0.9"/>
+        <text x="0" y="5" fill="#141b1c" font-size="10" font-weight="bold" text-anchor="middle">BOMBA</text>
+        <text x="0" y="-40" fill="#73B0BA" font-size="9" text-anchor="middle">${fisico.bomba}</text>
+      </g>
+      
+      <!-- Legendas -->
+      <g transform="translate(20, 20)">
+        <text fill="${themeColor('--accent')}" font-size="10" font-weight="bold">SISTEMA FRIGORÍFICO</text>
+        <text y="20" fill="${themeColor('--muted')}" font-size="9">Monitoramento em Tempo Real</text>
+      </g>
+    </svg>
   `;
-  wrapper.appendChild(controls);
-  
-  // Container do SVG
-  const svgContainer = document.createElement('div');
-  svgContainer.style.width = '100%';
-  svgContainer.style.height = '100%';
-  wrapper.appendChild(svgContainer);
-  
-  const nodes = [
-    { id: 'Gateway', type: 'gateway', fx: 600, fy: 300 },
-    ...motes.map(m => ({ id: m, type: 'mote' }))
-  ];
-  
-  const links = motes.map(m => {
-    const moteData = f.filter(d => d.mote === m);
-    const loss = moteData.length > 0 
-      ? moteData.reduce((s, d) => s + d.packetLoss, 0) / moteData.length 
-      : 0;
-    return { source: 'Gateway', target: m, loss: loss };
-  });
-  
-  const width = 1200, height = 600;
-  const svg = d3.select(svgContainer)
-    .append('svg')
-    .attr('width', '100%')
-    .attr('height', '100%')
-    .attr('viewBox', `0 0 ${width} ${height}`)
-    .style('background', '#141b1c');
-  
-  const g = svg.append('g');
-  
-  // Salvar zoom para reset
-  const zoom = d3.zoom()
-    .scaleExtent([0.3, 5])
-    .on('zoom', (event) => {
-      g.attr('transform', event.transform);
-    });
-  
-  svg.call(zoom);
-  
-  // Função global para reset de zoom
-  window.resetTopologyZoom = () => {
-    svg.transition().duration(750).call(
-      zoom.transform,
-      d3.zoomIdentity
-    );
-  };
-  
-  const simulation = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(links).id(d => d.id).distance(200))
-    .force('charge', d3.forceManyBody().strength(-400))
-    .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(50));
-  
-  // Toggle física
-  window.toggleTopologyPhysics = () => {
-    const btn = document.querySelector('.topology-controls button:nth-child(2)');
-    if (simulation.alpha() > 0) {
-      simulation.stop();
-      btn.textContent = '⚡ Física: OFF';
-    } else {
-      simulation.alpha(1).restart();
-      btn.textContent = '⚡ Física: ON';
-    }
-  };
-  
-  // Gradiente para links
-  const defs = svg.append('defs');
-  links.forEach((link, i) => {
-    const gradient = defs.append('linearGradient')
-      .attr('id', `gradient-${i}`)
-      .attr('gradientUnits', 'userSpaceOnUse');
-    
-    gradient.append('stop')
-      .attr('offset', '0%')
-      .attr('stop-color', '#5DE3FA');
-    
-    gradient.append('stop')
-      .attr('offset', '100%')
-      .attr('stop-color', link.loss > 0.1 ? '#FAA45C' : '#73B0BA');
-  });
-  
-  const link = g.append('g')
-    .selectAll('line')
-    .data(links)
-    .join('line')
-    .attr('stroke', (d, i) => `url(#gradient-${i})`)
-    .attr('stroke-width', d => d.loss > 0.1 ? 3 : 2)
-    .attr('opacity', 0.7);
-  
-  const node = g.append('g')
-    .selectAll('circle')
-    .data(nodes)
-    .join('circle')
-    .attr('r', d => d.type === 'gateway' ? 35 : 20)
-    .attr('fill', d => d.type === 'gateway' ? '#5DE3FA' : '#73B0BA')
-    .attr('stroke', '#5DE3FA')
-    .attr('stroke-width', d => d.type === 'gateway' ? 3 : 2)
-    .attr('opacity', 0.9)
-    .style('cursor', 'grab')
-    .style('filter', 'drop-shadow(0 0 8px rgba(93, 227, 250, 0.5))')
-    .call(d3.drag()
-      .on('start', dragstarted)
-      .on('drag', dragged)
-      .on('end', dragended));
-  
-  const label = g.append('g')
-    .selectAll('text')
-    .data(nodes)
-    .join('text')
-    .text(d => d.id)
-    .attr('font-size', d => d.type === 'gateway' ? 13 : 11)
-    .attr('font-weight', d => d.type === 'gateway' ? 'bold' : 'normal')
-    .attr('fill', '#fff')
-    .attr('text-anchor', 'middle')
-    .attr('dy', d => d.type === 'gateway' ? 5 : 4)
-    .style('pointer-events', 'none')
-    .style('user-select', 'none')
-    .style('text-shadow', '0 0 4px rgba(0,0,0,0.8)');
-  
-  node.append('title')
-    .text(d => {
-      if (d.type === 'gateway') return '🌐 Gateway Central\n(arraste para mover)';
-      const moteData = f.filter(r => r.mote === d.id);
-      if (moteData.length === 0) return d.id;
-      const avgLoss = (moteData.reduce((s, r) => s + r.packetLoss, 0) / moteData.length * 100).toFixed(2);
-      const avgJitter = Math.round(moteData.reduce((s, r) => s + r.jitter, 0) / moteData.length);
-      const avgRssi = Math.round(moteData.reduce((s, r) => s + r.rssi, 0) / moteData.length);
-      return `📡 ${d.id}\n━━━━━━━━━━━━━\n📊 Perda: ${avgLoss}%\n⏱️ Jitter: ${avgJitter}ms\n📶 RSSI: ${avgRssi}dBm\n\n💡 Arraste para mover`;
-    });
-  
-  simulation.on('tick', () => {
-    link
-      .attr('x1', d => d.source.x)
-      .attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x)
-      .attr('y2', d => d.target.y);
-    
-    node
-      .attr('cx', d => d.x)
-      .attr('cy', d => d.y);
-    
-    label
-      .attr('x', d => d.x)
-      .attr('y', d => d.y);
-  });
-  
-  function dragstarted(event, d) {
-    if (!event.active) simulation.alphaTarget(0.3).restart();
-    d.fx = d.x;
-    d.fy = d.y;
-    d3.select(this).style('cursor', 'grabbing');
-  }
-  
-  function dragged(event, d) {
-    d.fx = event.x;
-    d.fy = event.y;
-  }
-  
-  function dragended(event, d) {
-    if (!event.active) simulation.alphaTarget(0);
-    if (d.type !== 'gateway') {
-      d.fx = null;
-      d.fy = null;
-    }
-    d3.select(this).style('cursor', 'grab');
-  }
-  
-  // Legendas
-  const legend = g.append('g')
-    .attr('transform', 'translate(20, 20)');
-  
-  const legendData = [
-    { color: '#5DE3FA', text: '⚡ Gateway' },
-    { color: '#73B0BA', text: '📡 Mote OK (<5% perda)' },
-    { color: '#FAA45C', text: '⚠️ Mote Degradado (>10% perda)' }
-  ];
-  
-  legendData.forEach((item, i) => {
-    const lg = legend.append('g')
-      .attr('transform', `translate(0, ${i * 25})`);
-    
-    lg.append('circle')
-      .attr('r', 8)
-      .attr('fill', item.color)
-      .attr('opacity', 0.9);
-    
-    lg.append('text')
-      .attr('x', 15)
-      .attr('y', 4)
-      .attr('fill', '#fff')
-      .attr('font-size', 11)
-      .style('text-shadow', '0 0 4px rgba(0,0,0,0.8)')
-      .text(item.text);
-  });
-}
-
-// Função de fallback para SVG estático
-function renderSimImageStatic() {
-  const container = document.getElementById('simImage');
-  if (!container) return;
-  
-  const f = applyFilters(window.DATA);
-  const motes = Array.from(new Set(f.map(d => d.mote))).slice(0, 8);
-  
-  let circles = '';
-  let lines = '';
-  
-  motes.forEach((mote, i) => {
-    const angle = (i * 2 * Math.PI) / motes.length;
-    const x = 600 + 220 * Math.cos(angle);
-    const y = 300 + 220 * Math.sin(angle);
-    
-    const moteData = f.filter(d => d.mote === mote);
-    const moteLoss = moteData.length > 0 
-      ? moteData.reduce((sum, d) => sum + d.packetLoss, 0) / moteData.length 
-      : 0;
-    const color = moteLoss > 0.1 ? '#FAA45C' : moteLoss > 0.05 ? '#73B0BA' : '#5DE3FA';
-    
-    lines += `<line x1="600" y1="300" x2="${x}" y2="${y}" stroke="${color}" stroke-width="2" opacity="0.6"/>`;
-    circles += `<circle cx="${x}" cy="${y}" r="28" fill="${color}" opacity="0.8"/>`;
-    circles += `<text x="${x}" y="${y+5}" fill="#141b1c" font-size="11" font-weight="600" text-anchor="middle">${mote}</text>`;
-  });
-  
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 1200 600'>
-    <rect width='100%' height='100%' fill='#141b1c'/>
-    ${lines}
-    <circle cx='600' cy='300' r='45' fill='#5DE3FA' opacity='0.95'/>
-    <text x='600' y='305' fill='#141b1c' font-size='12' font-weight='bold' text-anchor='middle'>GATEWAY</text>
-    ${circles}
-  </svg>`;
   
   container.innerHTML = svg;
 }
 
 /* ==========================
-   RENDERIZAÇÃO INTELIGENTE
+   GRÁFICOS DE TENDÊNCIAS
    ========================== */
 
-// Renderiza aba ativa com base na navegação
+function renderTempCompareChart() {
+  const hist = window.DATA.historico;
+  const now = Date.now();
+  
+  const last24h = hist.filter(h => h.timestamp > now - 24*3600*1000);
+  const prev24h = hist.filter(h => h.timestamp > now - 48*3600*1000 && h.timestamp <= now - 24*3600*1000);
+  
+  const labels = Array.from({length: 24}, (_, i) => `${i}h`);
+  const data1 = Array(24).fill(0);
+  const data2 = Array(24).fill(0);
+  
+  last24h.forEach(h => {
+    const hour = 23 - Math.floor((now - h.timestamp) / 3600000);
+    if (hour >= 0 && hour < 24) data1[hour] = h.temperatura;
+  });
+  
+  prev24h.forEach(h => {
+    const hour = 23 - Math.floor((now - 24*3600*1000 - h.timestamp) / 3600000);
+    if (hour >= 0 && hour < 24) data2[hour] = h.temperatura;
+  });
+  
+  const ctx = document.getElementById('tempCompareChart').getContext('2d');
+  
+  if (tempCompareChart) {
+    tempCompareChart.data.datasets[0].data = data1;
+    tempCompareChart.data.datasets[1].data = data2;
+    tempCompareChart.update();
+  } else {
+    tempCompareChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Últimas 24h',
+            data: data1,
+            borderColor: themeColor('--accent2'),
+            backgroundColor: 'rgba(250,164,92,0.1)',
+            tension: 0.4
+          },
+          {
+            label: '24-48h atrás',
+            data: data2,
+            borderColor: themeColor('--accent3'),
+            backgroundColor: 'rgba(115,176,186,0.1)',
+            tension: 0.4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: themeColor('--text') } } },
+        scales: {
+          y: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') } },
+          x: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') } }
+        }
+      }
+    });
+  }
+}
+
+function renderResourceCompareChart() {
+  const hist = window.DATA.historico;
+  const now = Date.now();
+  
+  const last24h = hist.filter(h => h.timestamp > now - 24*3600*1000);
+  const prev24h = hist.filter(h => h.timestamp > now - 48*3600*1000 && h.timestamp <= now - 24*3600*1000);
+  
+  const labels = Array.from({length: 24}, (_, i) => `${i}h`);
+  const cpu1 = Array(24).fill(0);
+  const cpu2 = Array(24).fill(0);
+  
+  last24h.forEach(h => {
+    const hour = 23 - Math.floor((now - h.timestamp) / 3600000);
+    if (hour >= 0 && hour < 24) cpu1[hour] = h.cpu;
+  });
+  
+  prev24h.forEach(h => {
+    const hour = 23 - Math.floor((now - 24*3600*1000 - h.timestamp) / 3600000);
+    if (hour >= 0 && hour < 24) cpu2[hour] = h.cpu;
+  });
+  
+  const ctx = document.getElementById('resourceCompareChart').getContext('2d');
+  
+  if (resourceCompareChart) {
+    resourceCompareChart.data.datasets[0].data = cpu1;
+    resourceCompareChart.data.datasets[1].data = cpu2;
+    resourceCompareChart.update();
+  } else {
+    resourceCompareChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'CPU Últimas 24h',
+            data: cpu1,
+            borderColor: themeColor('--accent'),
+            backgroundColor: 'rgba(93,227,250,0.1)',
+            tension: 0.4
+          },
+          {
+            label: 'CPU 24-48h atrás',
+            data: cpu2,
+            borderColor: themeColor('--accent3'),
+            backgroundColor: 'rgba(115,176,186,0.1)',
+            tension: 0.4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: themeColor('--text') } } },
+        scales: {
+          y: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') }, max: 100 },
+          x: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') } }
+        }
+      }
+    });
+  }
+}
+
+function renderMsgRateChart() {
+  const hist = window.DATA.historico.slice(-60);
+  const labels = hist.map(h => new Date(h.timestamp).toLocaleTimeString());
+  const rates = hist.map(h => h.taxa_msgs || 0);
+  
+  const ctx = document.getElementById('msgRateChart').getContext('2d');
+  
+  if (msgRateChart) {
+    msgRateChart.data.labels = labels;
+    msgRateChart.data.datasets[0].data = rates;
+    msgRateChart.update();
+  } else {
+    msgRateChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Taxa de Mensagens (msgs/s)',
+          data: rates,
+          backgroundColor: themeColor('--accent'),
+          borderColor: themeColor('--accent'),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: themeColor('--text') } } },
+        scales: {
+          y: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') } },
+          x: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') } }
+        }
+      }
+    });
+  }
+}
+
+function renderEventAnalysisChart() {
+  const hist = window.DATA.historico;
+  const statusCounts = {};
+  
+  hist.forEach(h => {
+    statusCounts[h.status] = (statusCounts[h.status] || 0) + 1;
+  });
+  
+  const labels = Object.keys(statusCounts);
+  const data = Object.values(statusCounts);
+  
+  const ctx = document.getElementById('eventAnalysisChart').getContext('2d');
+  
+  if (eventAnalysisChart) {
+    eventAnalysisChart.data.labels = labels;
+    eventAnalysisChart.data.datasets[0].data = data;
+    eventAnalysisChart.update();
+  } else {
+    eventAnalysisChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: [
+            themeColor('--accent3'),
+            themeColor('--accent2'),
+            themeColor('--danger')
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: themeColor('--text') } } }
+      }
+    });
+  }
+}
+
+function renderStats() {
+  const hist = window.DATA.historico;
+  
+  // Tempo bomba ativa
+  const bombaOn = hist.filter(h => h.bomba === 'ON').length;
+  document.getElementById('statBombaAtiva').textContent = Math.round((bombaOn / hist.length) * 100) + '%';
+  
+  // Temp média
+  const avgTemp = hist.reduce((sum, h) => sum + h.temperatura, 0) / hist.length;
+  document.getElementById('statTempMedia').textContent = avgTemp.toFixed(1) + '°C';
+  
+  // CPU média
+  const avgCpu = hist.reduce((sum, h) => sum + h.cpu, 0) / hist.length;
+  document.getElementById('statCpuMedia').textContent = avgCpu.toFixed(1) + '%';
+  
+  // Msgs inválidas
+  const totalInvalid = hist.reduce((sum, h) => sum + (h.msgs_invalidas || 0), 0);
+  document.getElementById('statMsgsInvalidas').textContent = totalInvalid;
+}
+
+/* ==========================
+   CONTROLE DE ATAQUES
+   ========================== */
+
+// Estado dos ataques
+const attackState = {
+  flood: false,
+  dos: false
+};
+
+// Referências dos botões
+const attackFloodBtn = document.getElementById('attackFlood');
+const attackDosBtn = document.getElementById('attackDos');
+const mitigateFloodBtn = document.getElementById('mitigateFlood');
+const mitigateDosBtn = document.getElementById('mitigateDos');
+
+// Função para executar script no Fedora
+async function executeScript(endpoint, body = null) {
+  try {
+    const response = await fetch(`https://septariate-woodrow-fixatedly.ngrok-free.dev${endpoint}`, {
+      method: 'POST',
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : null
+    });
+
+    if (!response.ok) {
+      throw new Error('Erro ao executar script');
+    }
+
+    return await response.json();
+
+  } catch (err) {
+    console.error('Erro:', err);
+    alert("Erro: " + err.message);
+  }
+}
+
+// Handler do botão Flood Attack
+attackFloodBtn.addEventListener('click', async () => {
+  if (attackState.flood) {
+    await executeScript("/parar/ataque_flood");
+    attackState.flood = false;
+    attackFloodBtn.classList.remove('active');
+    console.log("✅ Ataque Flood parado");
+  } else {
+    await executeScript("/executar", { acao: "ataque_flood" });
+    attackState.flood = true;
+    attackFloodBtn.classList.add('active');
+    console.log("⚠️ Ataque Flood iniciado");
+  }
+});
+
+// Handler do botão DoS Attack
+attackDosBtn.addEventListener('click', async () => {
+  if (attackState.dos) {
+    await executeScript("/parar/ataque_dos");
+    attackState.dos = false;
+    attackDosBtn.classList.remove('active');
+    console.log("✅ Ataque DoS parado");
+  } else {
+    await executeScript("/executar", { acao: "ataque_dos" });
+    attackState.dos = true;
+    attackDosBtn.classList.add('active');
+    console.log("⚠️ Ataque DoS iniciado");
+  }
+});
+
+// Handler do botão Mitigate Flood
+mitigateFloodBtn.addEventListener("click", async () => {
+  await executeScript("/executar", { acao: "mitigacao_flood" });
+
+  if (attackState.flood) {
+    await executeScript("/parar/ataque_flood");
+    attackState.flood = false;
+    attackFloodBtn.classList.remove("active");
+  }
+
+  alert("🛡️ Mitigação Flood ativada com sucesso!");
+});
+
+// Handler do botão Mitigate DoS
+mitigateDosBtn.addEventListener("click", async () => {
+  await executeScript("/executar", { acao: "mitigacao_dos" });
+
+  if (attackState.dos) {
+    await executeScript("/parar/ataque_dos");
+    attackState.dos = false;
+    attackDosBtn.classList.remove("active");
+  }
+
+  alert("🛡️ Mitigação DoS ativada com sucesso!");
+});
+
+/* ==========================
+   RENDERIZAÇÃO POR ABA
+   ========================== */
+
 function renderActiveTab() {
   const activeTab = document.querySelector('.tab.active')?.dataset.tab;
-  if (!activeTab) return;
-  
   console.log('🎯 Renderizando aba:', activeTab);
   
   switch (activeTab) {
-    case 'resumo':
+    case 'visao-geral':
       renderKPIs();
-      renderTimeSeries();
-      renderTopChart();
+      renderTempChart();
+      renderResourceChart();
       renderLatestLogs();
       renderSimImage();
       break;
-    case 'dispositivos':
-      if (selMoteDet.options.length > 0) {
-        const mote = selMoteDet.value || selMoteDet.options[0].value;
-        renderDeviceSeries(mote);
-        renderDeviceKpis(mote);
-        renderDeviceLogs(mote);
-      }
-      break;
-    case 'eventos':
-      renderTimeline();
-      break;
     case 'tendencias':
-      renderCompare();
-      break;
-    case 'config':
-      // Aba estática
+      renderTempCompareChart();
+      renderResourceCompareChart();
+      renderMsgRateChart();
+      renderEventAnalysisChart();
+      renderStats();
       break;
   }
 }
 
-// Atualiza todos os dados e filtros
 function renderAll() {
-  console.log('🔄 Iniciando renderAll()...');
-  populateFiltersFromData();
-  renderSimImage();
+  console.log('🔄 Renderizando tudo...');
   renderActiveTab();
 }
 
 /* ==========================
-   ASSINATURA DO FIREBASE
+   FIREBASE - ASSINATURA
    ========================== */
 
-// Função para assinar dados do Realtime Database e popular window.DATA
-function subscribeFirebase(path = 'logs') {
-  console.log('🔥 Conectando ao Firebase no caminho:', path);
+function subscribeFirebase() {
+  console.log('🔥 Conectando ao Firebase...');
   
-  try {
-    const dbRef = ref(db, path);
-    onValue(
-      dbRef,
-      (snapshot) => {
-        console.log('📥 Dados recebidos do Firebase');
-        const val = snapshot.val();
-        
-        if (!val) {
-          console.warn('⚠️ Firebase: nó vazio em', path);
-          console.log('💡 Dica: Verifique se há dados no caminho "' + path + '" no Firebase Realtime Database');
-          return;
-        }
-        
-        console.log('📦 Tipo de dados recebidos:', typeof val);
-        console.log('📦 Dados brutos:', val);
-        
-        // Converte os dados para array
-        if (Array.isArray(val)) {
-          window.DATA = val;
-        } else if (typeof val === 'object') {
-          if (Array.isArray(val.logs)) {
-            window.DATA = val.logs;
-          } else {
-            window.DATA = Object.values(val);
-          }
-        } else {
-          console.warn('⚠️ Firebase: formato de dados inesperado em', path);
-          return;
-        }
-        
-        console.log('📊 Total de registros antes da normalização:', window.DATA.length);
-        
-        // Normaliza os dados
-        window.DATA = window.DATA.map((r, index) => {
-          const rawTs = r.ts ?? r.time ?? r.Time ?? r.timestamp ?? '';
-          let ts;
-          if (typeof rawTs === 'number') {
-            ts = new Date(rawTs).toISOString();
-          } else if (typeof rawTs === 'string') {
-            const d = new Date(rawTs);
-            ts = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-          } else {
-            ts = new Date().toISOString();
-          }
-
-          const mote = r.mote ?? (r.node_id ? 'MOTE' + r.node_id : r.node ?? 'MOTE' + index);
-          const protocol = r.protocol ?? r.protocolo ?? 'Unknown';
-          const event = r.event ?? r.evento ?? 'Normal';
-          const source = r.source ?? r.origem ?? 'Mote';
-
-          const packetLoss = Number(r.packetLoss ?? r.perda_pacotes ?? r.perda ?? 0) || 0;
-          const jitter = Number(r.jitter ?? 0) || 0;
-          const rssi = Number(r.rssi ?? 0) || 0;
-          const cpu = Number(r.cpu ?? 0) || 0;
-          const ram = Number(r.ram ?? 0) || 0;
-          const energy = Number(r.energy ?? r.consumo_energia ?? 0) || 0;
-
-          return {
-            ts,
-            mote,
-            protocol,
-            event,
-            packetLoss,
-            jitter,
-            rssi,
-            cpu,
-            ram,
-            temperature,
-            energy,
-            source,
-          };
-        });
-        
-        console.log('✅ Dados normalizados:', window.DATA.length, 'registros');
-        console.log('📄 Exemplo de registro normalizado:', window.DATA[0]);
-        
-        // Popula filtros e renderiza
-        populateFiltersFromData();
-        renderAll();
-      },
-      (err) => {
-        console.error('❌ Erro ao ler Firebase:', err);
-        console.log('💡 Verifique:');
-        console.log('   1. Configuração do Firebase em firebase-config.js');
-        console.log('   2. Regras de segurança do Realtime Database');
-        console.log('   3. Caminho dos dados (atual: "' + path + '")');
+  const dbRef = ref(db, 'frigorifico');
+  onValue(
+    dbRef,
+    (snapshot) => {
+      const val = snapshot.val();
+      
+      if (!val) {
+        console.warn('⚠️ Firebase: dados vazios');
+        return;
       }
-    );
-  } catch (err) {
-    console.error('❌ Erro ao assinar Firebase:', err);
-  }
+      
+      console.log('📦 Dados recebidos:', val);
+      
+      // Atualiza dados principais
+      window.DATA.fisico = val.fisico || window.DATA.fisico;
+      window.DATA.virtual = val.virtual || window.DATA.virtual;
+      
+      // Adiciona ao histórico
+      const entrada = {
+        timestamp: val.virtual?.monitoramento?.timestamp || Date.now(),
+        temperatura: val.fisico?.temperatura || 0,
+        nivel: val.fisico?.nivel || 0,
+        bomba: val.fisico?.bomba || 'OFF',
+        cpu: val.virtual?.monitoramento?.sistema?.cpu || 0,
+        memoria: val.virtual?.monitoramento?.sistema?.memoria || 0,
+        status: val.virtual?.monitoramento?.status || 'NORMAL',
+        taxa_msgs: val.virtual?.monitoramento?.trafego?.taxa_msgs || 0,
+        msgs_invalidas: val.virtual?.monitoramento?.trafego?.msgs_invalidas || 0
+      };
+      
+      window.DATA.historico.push(entrada);
+      
+      // Limita histórico a 1000 entradas
+      if (window.DATA.historico.length > 1000) {
+        window.DATA.historico = window.DATA.historico.slice(-1000);
+      }
+      
+      console.log('✅ Histórico atualizado:', window.DATA.historico.length, 'entradas');
+      
+      renderAll();
+    },
+    (err) => {
+      console.error('❌ Erro Firebase:', err);
+    }
+  );
 }
 
 /* ==========================
    NAVEGAÇÃO ENTRE ABAS
    ========================== */
 
-// Adiciona listeners para navegação entre abas
 tabs.forEach((tab) => {
   tab.addEventListener('click', () => {
     const key = tab.dataset.tab;
-    tabs.forEach((t) => t.classList.remove('active'));
-    tab.classList.add('active');
-    Object.keys(pages).forEach((k) => {
-      pages[k].style.display = k === key ? 'flex' : 'none';
+    tabs.forEach((t) => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
     });
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    
+    Object.keys(pages).forEach((k) => {
+      pages[k].style.display = k === key ? 'grid' : 'none';
+    });
+    
     renderActiveTab();
   });
 });
@@ -971,52 +805,32 @@ tabs.forEach((tab) => {
    LISTENERS DE EVENTOS
    ========================== */
 
-// Atualiza dados ao clicar em Atualizar
 refreshBtn.addEventListener('click', () => {
-  console.log('🔄 Botão atualizar clicado');
+  console.log('🔄 Atualizando...');
   renderAll();
-});
-
-// Aplica filtros e atualiza gráficos ao mudar seleção
-const debouncedRender = debounce(renderAll, 300);
-[fMote, fProt, fSource, timeRange].forEach((el) =>
-  el.addEventListener('change', () => {
-    console.log('🔍 Filtro alterado');
-    debouncedRender();
-  })
-);
-
-// Renderiza série e KPIs do dispositivo selecionado
-selMoteDet.addEventListener('change', () => {
-  console.log('📱 Dispositivo selecionado:', selMoteDet.value);
-  renderDeviceSeries(selMoteDet.value);
-  renderDeviceKpis(selMoteDet.value);
-  renderDeviceLogs(selMoteDet.value);
-});
-
-// Listener para reconhecimento de alertas
-document.getElementById('ackAll').addEventListener('click', () => {
-  console.log('✅ Alertas reconhecidos');
-  alert('Todos os alertas foram reconhecidos');
 });
 
 /* ==========================
    INICIALIZAÇÃO
    ========================== */
 
-console.log('🚀 Inicializando Dashboard IIoT...');
+console.log('🚀 Inicializando Dashboard Frigorífico...');
 
-// Inicia assinatura do Firebase
-// IMPORTANTE: Altere o path se seus dados estiverem em outro nó
-// Exemplos: '/', 'data', 'readings', 'metrics', etc.
 try {
-  subscribeFirebase('logs');
+  subscribeFirebase();
 } catch (err) {
-  console.error('❌ Erro ao inicializar Firebase:', err);
+  console.error('❌ Erro ao inicializar:', err);
 }
 
-// Renderiza interface inicial (mesmo sem dados)
 renderSimImage();
+console.log('✅ Dashboard carregado');
 
-console.log('✅ Dashboard IIoT carregado');
-console.log('📊 Aguardando dados do Firebase...');
+// Adicione no final do main.js, temporariamente
+const logo = document.getElementById('sidebarLogo');
+logo.addEventListener('error', () => {
+  console.error('❌ Logo não encontrada em: img/logo.png');
+  console.log('📁 Verifique se o arquivo existe neste caminho');
+});
+logo.addEventListener('load', () => {
+  console.log('✅ Logo carregada com sucesso!');
+});

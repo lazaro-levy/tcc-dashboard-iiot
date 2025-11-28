@@ -19,124 +19,176 @@
   <!-- Biblioteca de gráficos Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-  <!-- Estilos personalizados -->
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <!-- Contêiner principal da aplicação -->
+  <!-- Container principal da aplicação -->
   <div class="app" id="app">
 
     <!-- ===== Sidebar lateral com abas e menu ===== -->
-    <aside class="sidebar" role="navigation" aria-label="Menu lateral">
+    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu lateral">
       <!-- Logo da aplicação -->
-      <img src="img/logo.png" alt="Logo" style="width: 160px; height:auto; margin-bottom:10px; display:block; margin-left:30px;">
+      <img src="img/logo.png" alt="Logo-CARIIoT" class="sidebar-logo" id="sidebarLogo">
+
+      <!-- Botão toggle -->
+      <button class="sidebar-toggle" id="sidebarToggle" title="Expandir/Recolher Menu">☰</button>
 
       <!-- Abas de navegação -->
       <nav class="tabs-sidebar" role="tablist" aria-label="Abas">
-        <button class="tab active" data-tab="resumo" role="tab" aria-selected="true">Resumo</button>
-        <button class="tab" data-tab="dispositivos" role="tab">Dispositivos</button>
-        <button class="tab" data-tab="eventos" role="tab">Eventos & Alertas</button>
-        <button class="tab" data-tab="tendencias" role="tab">Tendências & Análises</button>
-        <button class="tab" data-tab="config" role="tab">Configuração</button>
+        <button class="tab active" data-tab="visao-geral" role="tab" aria-selected="true">
+          <span class="tab-icon">📊</span>
+          <span class="tab-label">Visão Geral</span>
+        </button>
+        <button class="tab" data-tab="tendencias" role="tab">
+          <span class="tab-icon">📈</span>
+          <span class="tab-label">Tendências & Análises</span>
+        </button>
       </nav>
+
+      <!-- Seção de Ataques -->
+      <div class="attack-section">
+        <div class="attack-section-title">⚠️ Ataques</div>
+        <div class="attack-buttons">
+          <button class="attack-btn" id="attackFlood" data-attack="flood">
+            <span class="btn-icon">🌊</span>
+            <span class="btn-label">Flood</span>
+          </button>
+          <button class="attack-btn" id="attackDos" data-attack="dos">
+            <span class="btn-icon">💥</span>
+            <span class="btn-label">DoS</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Seção de Mitigações -->
+      <div class="attack-section">
+        <div class="attack-section-title">🛡️ Mitigações</div>
+        <div class="attack-buttons">
+          <button class="mitigation-btn" id="mitigateFlood" data-mitigation="flood">
+            <span class="btn-icon">🔒</span>
+            <span class="btn-label">Anti-Flood</span>
+          </button>
+          <button class="mitigation-btn" id="mitigateDos" data-mitigation="dos">
+            <span class="btn-icon">🛡️</span>
+            <span class="btn-label">Anti-DoS</span>
+          </button>
+        </div>
+      </div>
 
       <!-- Filtros e ações principais -->
       <div class="filters" role="region" aria-label="Filtros e Ações">
-        <label class="small" for="timeRange">Últimos</label>
+        <label class="small" for="timeRange">Período</label>
         <select id="timeRange" aria-label="Últimos X minutos">
           <option value="5">5 minutos</option>
           <option value="15" selected>15 minutos</option>
           <option value="60">1 hora</option>
-          <option value="1440000000">24 horas</option>
+          <option value="1440">24 horas</option>
         </select>
 
-        <label class="small" for="filterMote">Dispositivo (Mote)</label>
-        <select id="filterMote" aria-label="Todos os Motes">
-          <option value="">Todos os Motes</option>
-        </select>
-
-        <label class="small" for="filterProtocol">Protocolo</label>
-        <select id="filterProtocol" aria-label="Todos os Protocolos">
-          <option value="">Todos os Protocolos</option>
-        </select>
-
-        <label class="small" for="filterSource">Origem dos Dados</label>
-        <select id="filterSource" aria-label="Todas as Origens">
-          <option value="">Todas as Origens</option>
-          <option value="Mote">Mote</option>
-        </select>
-
-        <button id="refreshBtn" title="Recarregar">🔄 Atualizar</button>
+        <button id="refreshBtn" class="primary" title="Recarregar">🔄 Atualizar</button>
       </div>
     </aside>
 
     <!-- ===== Área principal do dashboard ===== -->
     <div class="main-content">
       <main>
-        <!-- ABA RESUMO -->
-        <section id="page-resumo" class="col wide" aria-label="Resumo" style="display:flex; flex-direction:column;">
-          <!-- KPIs gerais -->
-          <div class="card kpis" role="region" aria-label="KPIs geral">
+        <!-- ABA VISÃO GERAL -->
+        <section id="page-visao-geral" class="col wide" aria-label="Visão Geral" style="display:grid; grid-template-columns: 300px 1fr; grid-template-rows: auto 1fr; gap: 12px;">
+          
+          <!-- KPIs à esquerda -->
+          <div class="kpis" style="grid-row: 1 / 3;">
             <div class="kpi">
-              <div class="label">Última Perda de Pacotes (%)</div>
-              <div class="value mono" id="kpiPacketLoss" style="color:var(--text)">—</div>
+              <div class="label">Temperatura</div>
+              <div class="value mono" id="kpiTemperatura">
+                <span>—</span>
+                <span class="unit">°C</span>
+                <span class="status-indicator status-ok"></span>
+              </div>
             </div>
+            
             <div class="kpi">
-              <div class="label">Último Jitter (ms)</div>
-              <div class="value mono" id="kpiJitter" style="color:var(--text)">—</div>
+              <div class="label">Nível do Reservatório</div>
+              <div class="value mono" id="kpiNivel">
+                <span>—</span>
+                <span class="unit">%</span>
+                <span class="status-indicator status-ok"></span>
+              </div>
             </div>
+            
             <div class="kpi">
-              <div class="label">Temperatura (°C)</div>
+              <div class="label">Status da Bomba</div>
+              <div class="value" id="kpiBomba">
+                <span>—</span>
+                <span class="status-indicator status-ok"></span>
+              </div>
             </div>
+            
             <div class="kpi">
-              <div class="label">CPU Mote - Média (%)</div>
-              <div class="value mono" id="kpiCpuMote" style="color:var(--text)">—</div>
+              <div class="label">CPU Sistema</div>
+              <div class="value mono" id="kpiCpu">
+                <span>—</span>
+                <span class="unit">%</span>
+                <span class="status-indicator status-ok"></span>
+              </div>
             </div>
+            
             <div class="kpi">
-              <div class="label">Consumo Energia Médio (mW)</div>
-              <div class="value mono" id="kpiEnergy" style="color:var(--text)">—</div>
+              <div class="label">Memória Sistema</div>
+              <div class="value mono" id="kpiMemoria">
+                <span>—</span>
+                <span class="unit">%</span>
+                <span class="status-indicator status-ok"></span>
+              </div>
             </div>
+            
             <div class="kpi">
-              <div class="label">Eventos / min</div>
-              <div class="value mono" id="kpiEventRate" style="color:var(--text)">—</div>
+              <div class="label">Status Sistema</div>
+              <div class="value" id="kpiStatus">
+                <span>—</span>
+                <span class="status-indicator status-ok"></span>
+              </div>
             </div>
           </div>
 
-          <!-- Gráfico de séries temporais e feed de eventos -->
-          <div style="display:flex; gap:12px; margin-top:8px; align-items:stretch;">
-            <div class="card" style="flex:1; min-width:360px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <strong>Série Temporal Principal</strong>
-                <span class="small">Perda de Pacotes % (esq) • Jitter ms (dir)</span>
-              </div>
-              <div style="height:300px">
-                <canvas id="timeChart" aria-label="Série temporal"></canvas>
+          <!-- Topologia à direita superior -->
+          <div class="card">
+            <strong>Topologia do Sistema</strong>
+            <div style="height:400px; margin-top:12px; border-radius:8px; overflow:hidden; background:var(--bg2); display:flex; align-items:center; justify-content:center;">
+              <div id="simImage" style="width:100%; height:100%;"></div>
+            </div>
+          </div>
+
+          <!-- Gráficos inferiores -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="card">
+              <strong>Temperatura ao Longo do Tempo</strong>
+              <div style="height:240px; margin-top:8px;">
+                <canvas id="tempChart" aria-label="Temperatura"></canvas>
               </div>
             </div>
 
-            <div class="card" style="width:360px; min-width:320px; display:flex; flex-direction:column;">
-              <strong>Topologia</strong>
-              <div style="height:200px; margin-top:8px; border-radius:8px; overflow:hidden; background:var(--bg2); display:flex; align-items:center; justify-content:center;">
-                <div id="simImage" style="width:100%; height:100%;"></div>
+            <div class="card">
+              <strong>Utilização de Recursos</strong>
+              <div style="height:240px; margin-top:8px;">
+                <canvas id="resourceChart" aria-label="CPU e Memória"></canvas>
               </div>
             </div>
           </div>
 
-          <!-- Tabela de últimas leituras -->
-          <div class="card" style="margin-top:8px;">
-            <strong>Registro de Logs</strong>
-            <div style="max-height:220px; overflow:auto; margin-top:8px;">
+          <!-- Tabela de logs abaixo de tudo -->
+          <div class="card" style="grid-column: 1 / 3; margin-top: 8px;">
+            <strong>Registro de Logs do Sistema</strong>
+            <div style="max-height:280px; overflow:auto; margin-top:8px;">
               <table id="latestTable">
                 <thead>
                   <tr>
                     <th>Data/Hora</th>
-                    <th>Mote</th>
-                    <th>Protocolo</th>
-                    <th>Evento</th>
-                    <th>Perda</th>
-                    <th>Jitter</th>
-                    <th>RSSI</th>
-                    <th>Severidade</th>
+                    <th>Status</th>
+                    <th>Temperatura</th>
+                    <th>Nível</th>
+                    <th>Bomba</th>
+                    <th>CPU</th>
+                    <th>Memória</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -145,49 +197,61 @@
           </div>
         </section>
 
-        <!-- ABA DISPOSITIVOS -->
-        <section id="page-dispositivos" class="col wide" aria-label="Dispositivos" style="display:none; flex-direction:column; flex:1;">
+        <!-- ABA TENDÊNCIAS -->
+        <section id="page-tendencias" class="col wide" aria-label="Tendências & Análises" style="display:none; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="card" style="grid-column: 1 / 3;">
+            <strong>Análise de Tendências</strong>
+            <div class="small">Comparativo de períodos e padrões de comportamento</div>
+          </div>
+
           <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div><strong>DISPOSITIVOS</strong><div class="small">Detalhes por Mote</div></div>
-              <select id="selectMoteDetails" aria-label="Selecionar mote"></select>
+            <strong>Temperatura - Últimas 24h vs 24-48h</strong>
+            <div style="height:280px; margin-top:8px;">
+              <canvas id="tempCompareChart"></canvas>
             </div>
           </div>
-          <div class="card kpis">
-            <div class="kpi"><div class="label">Última Perda de Pacotes (%)</div><div class="value mono" id="d_kpi_loss">—</div></div>
-            <div class="kpi"><div class="label">Último Jitter (ms)</div><div class="value mono" id="d_kpi_jitter">—</div></div>
-            <div class="kpi"><div class="label">RSSI Médio (dBm)</div><div class="value mono" id="d_kpi_rssi">—</div></div>
-            <div class="kpi"><div class="label">CPU (%)</div><div class="value mono" id="d_kpi_cpu">—</div></div>
-            <div class="kpi"><div class="label">RAM (%)</div><div class="value mono" id="d_kpi_ram">—</div></div>
+
+          <div class="card">
+            <strong>Recursos do Sistema - Comparativo</strong>
+            <div style="height:280px; margin-top:8px;">
+              <canvas id="resourceCompareChart"></canvas>
+            </div>
           </div>
-          <div class="card"><strong>Séries por Mote</strong><div style="height:260px; margin-top:8px;"><canvas id="deviceSeries"></canvas></div></div>
-          <div class="card"><strong>Logs do Mote</strong><div style="max-height:220px; overflow:auto; margin-top:8px;"><table id="deviceLogs"><thead><tr><th>Data/Hora</th><th>Evento</th><th>Perda</th><th>Jitter</th></tr></thead><tbody></tbody></table></div></div>
-        </section>
-        <!-- ABA EVENTOS -->
-        <section id="page-eventos" class="col wide" aria-label="Eventos & Alertas" style="display:none; flex-direction:column;">
-          <div class="card" style="display:flex; justify-content:space-between; align-items:center;"><div><strong>EVENTOS & ALERTAS</strong><div class="small">Linha do tempo e severidade</div></div><div><button id="ackAll">Acknowledge All</button></div></div>
-          <div class="card"><strong>Linha do Tempo de Eventos</strong><div style="max-height:320px;overflow:auto;margin-top:8px;"><table id="timelineTable"><thead><tr><th>Data/Hora</th><th>Mote</th><th>Evento</th><th>Severidade</th></tr></thead><tbody></tbody></table></div></div>
-          <div class="card"><strong>Detalhes do Evento</strong><div id="eventDetails" class="small" style="margin-top:8px">Selecione um evento na linha do tempo</div></div>
-        </section>
-        <!-- ABA TENDÊNCIAS -->
-        <section id="page-tendencias" class="col wide" aria-label="Tendências & Análises" style="display:none; flex-direction:column;">
-          <div class="card"><strong>TENDÊNCIAS & ANÁLISES</strong><div class="small">Percentuais e correlações</div></div>
-          <div class="card" style="margin-top:8px;"><strong>Comparativo Janela</strong><div style="height:220px;margin-top:8px;"><canvas id="compareChart"></canvas></div></div>
-        </section>
-        <!-- ABA CONFIG -->
-        <section id="page-config" class="col narrow" aria-label="Configuração" style="display:none; flex-direction:column;">
-          <div class="card"><strong>CONFIGURAÇÃO</strong><div class="small">Dicionário de métricas e thresholds</div></div>
-          <div class="card"><strong>Dicionário de Métricas</strong>
-            <table style="margin-top:8px"><thead><tr><th>Métrica</th><th>Unidade</th><th>Origem</th></tr></thead>
-            <tbody>
-              <tr><td>Perda de Pacotes</td><td>% ou fração</td><td>Mote</td></tr>
-              <tr><td>Jitter</td><td>ms</td><td>Mote</td></tr>
-              <tr><td>CPU</td><td>%</td><td>Mote</td></tr>
-            </tbody></table>
+
+          <div class="card">
+            <strong>Taxa de Mensagens do Sistema</strong>
+            <div style="height:280px; margin-top:8px;">
+              <canvas id="msgRateChart"></canvas>
+            </div>
           </div>
-          <div class="card" style="margin-top:8px"><strong>Thresholds (exemplo)</strong>
-            <table style="margin-top:8px"><thead><tr><th>Métrica</th><th>Amarelo</th><th>Vermelho</th></tr></thead>
-            <tbody><tr><td>Perda de Pacotes %</td><td>1%</td><td>5%</td></tr><tr><td>Jitter p95</td><td>100 ms</td><td>250 ms</td></tr></tbody></table>
+
+          <div class="card">
+            <strong>Análise de Eventos</strong>
+            <div style="height:280px; margin-top:8px;">
+              <canvas id="eventAnalysisChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card" style="grid-column: 1 / 3;">
+            <strong>Estatísticas de Operação</strong>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <div class="small">Tempo Bomba Ativa</div>
+                <div id="statBombaAtiva" class="stat-value accent">—</div>
+              </div>
+              <div class="stat-item">
+                <div class="small">Temp. Média</div>
+                <div id="statTempMedia" class="stat-value accent2">—</div>
+              </div>
+              <div class="stat-item">
+                <div class="small">CPU Média</div>
+                <div id="statCpuMedia" class="stat-value accent3">—</div>
+              </div>
+              <div class="stat-item">
+                <div class="small">Msgs Inválidas</div>
+                <div id="statMsgsInvalidas" class="stat-value danger">—</div>
+              </div>
+            </div>
           </div>
         </section>
       </main>
