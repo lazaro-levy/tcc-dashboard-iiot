@@ -45,6 +45,17 @@ const refreshBtn = document.getElementById('refreshBtn');
 
 sidebarToggle.addEventListener('click', () => {
   sidebar.classList.toggle('expanded');
+
+  // Força reflow e resize dos canvases após transição
+  setTimeout(() => {
+    // Se usa Chart.js, chame resize nos gráficos existentes
+    if (tempChart) tempChart.resize();
+    if (resourceChart) resourceChart.resize();
+    if (tempCompareChart) tempCompareChart.resize();
+    if (resourceCompareChart) resourceCompareChart.resize();
+    if (msgRateChart) msgRateChart.resize();
+    if (eventAnalysisChart) eventAnalysisChart.resize();
+  }, 320); // um pouco maior que a transição de 300ms
 });
 
 /* ==========================
@@ -80,9 +91,9 @@ function renderKPIs() {
   const tempIndicator = document.querySelector('#kpiTemperatura .status-indicator');
   tempElement.textContent = fisico.temperatura.toFixed(1);
   
-  if (fisico.temperatura < 5) {
+  if (fisico.temperatura < 34) {
     tempIndicator.className = 'status-indicator status-ok';
-  } else if (fisico.temperatura < 10) {
+  } else if (fisico.temperatura < 70) {
     tempIndicator.className = 'status-indicator status-warning';
   } else {
     tempIndicator.className = 'status-indicator status-critical';
@@ -367,7 +378,7 @@ function renderSimImage() {
       
       <!-- Legendas -->
       <g transform="translate(20, 20)">
-        <text fill="${themeColor('--accent')}" font-size="10" font-weight="bold">SISTEMA FRIGORÍFICO</text>
+        <text fill="${themeColor('--accent')}" font-size="25" font-weight="bold">Sistema Frigorífico</text>
         <text y="20" fill="${themeColor('--muted')}" font-size="9">Monitoramento em Tempo Real</text>
       </g>
     </svg>

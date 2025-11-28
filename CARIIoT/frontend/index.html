@@ -26,7 +26,7 @@
   <div class="app" id="app">
 
     <!-- ===== Sidebar lateral com abas e menu ===== -->
-    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu lateral">
+    <aside class="sidebar expanded" id="sidebar" role="navigation" aria-label="Menu lateral">
       <!-- Logo da aplicação -->
       <img src="img/logo.png" alt="Logo-CARIIoT" class="sidebar-logo" id="sidebarLogo">
 
@@ -93,55 +93,72 @@
     <div class="main-content">
       <main>
         <!-- ABA VISÃO GERAL -->
-        <section id="page-visao-geral" class="col wide" aria-label="Visão Geral" style="display:grid; grid-template-columns: 300px 1fr; grid-template-rows: auto 1fr; gap: 12px;">
+        <section id="page-visao-geral" class="col wide" aria-label="Visão Geral" style="display:grid; grid-template-columns: 563px 1fr; grid-template-rows: auto 1fr auto; gap: 12px;">
           
-          <!-- KPIs à esquerda -->
-          <div class="kpis" style="grid-row: 1 / 3;">
-            <div class="kpi">
+          <!-- Gráficos à esquerda empilhados -->
+          <div style="grid-row: 1 / 3; display: flex; flex-direction: column; gap: 12px;">
+            <div class="card">
+              <strong>Temperatura ao Longo do Tempo</strong>
+              <div style="height:180px; margin-top:8px;">
+                <canvas id="tempChart" aria-label="Temperatura"></canvas>
+              </div>
+            </div>
+
+            <div class="card">
+              <strong>Utilização de Recursos</strong>
+              <div style="height:180px; margin-top:8px;">
+                <canvas id="resourceChart" aria-label="CPU e Memória"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPIs compactos acima da topologia -->
+          <div class="kpis-compact" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+            <div class="kpi-compact">
               <div class="label">Temperatura</div>
-              <div class="value mono" id="kpiTemperatura">
+              <div class="value" id="kpiTemperatura">
                 <span>—</span>
                 <span class="unit">°C</span>
                 <span class="status-indicator status-ok"></span>
               </div>
             </div>
             
-            <div class="kpi">
-              <div class="label">Nível do Reservatório</div>
-              <div class="value mono" id="kpiNivel">
+            <div class="kpi-compact">
+              <div class="label">Nível Reservatório</div>
+              <div class="value" id="kpiNivel">
                 <span>—</span>
                 <span class="unit">%</span>
                 <span class="status-indicator status-ok"></span>
               </div>
             </div>
             
-            <div class="kpi">
-              <div class="label">Status da Bomba</div>
+            <div class="kpi-compact">
+              <div class="label">Status Bomba</div>
               <div class="value" id="kpiBomba">
                 <span>—</span>
                 <span class="status-indicator status-ok"></span>
               </div>
             </div>
             
-            <div class="kpi">
+            <div class="kpi-compact">
               <div class="label">CPU Sistema</div>
-              <div class="value mono" id="kpiCpu">
+              <div class="value" id="kpiCpu">
                 <span>—</span>
                 <span class="unit">%</span>
                 <span class="status-indicator status-ok"></span>
               </div>
             </div>
             
-            <div class="kpi">
+            <div class="kpi-compact">
               <div class="label">Memória Sistema</div>
-              <div class="value mono" id="kpiMemoria">
+              <div class="value" id="kpiMemoria">
                 <span>—</span>
                 <span class="unit">%</span>
                 <span class="status-indicator status-ok"></span>
               </div>
             </div>
             
-            <div class="kpi">
+            <div class="kpi-compact">
               <div class="label">Status Sistema</div>
               <div class="value" id="kpiStatus">
                 <span>—</span>
@@ -150,34 +167,17 @@
             </div>
           </div>
 
-          <!-- Topologia à direita superior -->
+          <!-- Topologia embaixo -->
           <div class="card">
             <strong>Topologia do Sistema</strong>
-            <div style="height:400px; margin-top:12px; border-radius:8px; overflow:hidden; background:var(--bg2); display:flex; align-items:center; justify-content:center;">
-              <div id="simImage" style="width:100%; height:100%;"></div>
-            </div>
-          </div>
-
-          <!-- Gráficos inferiores -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div class="card">
-              <strong>Temperatura ao Longo do Tempo</strong>
-              <div style="height:240px; margin-top:8px;">
-                <canvas id="tempChart" aria-label="Temperatura"></canvas>
-              </div>
-            </div>
-
-            <div class="card">
-              <strong>Utilização de Recursos</strong>
-              <div style="height:240px; margin-top:8px;">
-                <canvas id="resourceChart" aria-label="CPU e Memória"></canvas>
-              </div>
+            <div class="topologia-container">
+              <div id="simImage"></div>
             </div>
           </div>
 
           <!-- Tabela de logs abaixo de tudo -->
-          <div class="card" style="grid-column: 1 / 3; margin-top: 8px;">
-            <strong>Registro de Logs do Sistema</strong>
+          <div class="card" style="grid-column: 1 / 3;">
+            <strong>Registro de Logs</strong>
             <div style="max-height:280px; overflow:auto; margin-top:8px;">
               <table id="latestTable">
                 <thead>
