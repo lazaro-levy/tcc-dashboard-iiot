@@ -37,7 +37,7 @@ html, body {
 }
 
 body { 
-  background: linear-gradient(180deg, var(--bg), var(--accent) 120%); 
+  background: var(--bg);
   color: var(--text); 
 }
 
@@ -56,8 +56,10 @@ body {
     SIDEBAR
     =========================== */
 .sidebar {
-  width: 80px;
-  min-width: 80px;
+  margin: 10px 0 10px 10px;
+  width: 70px;
+  min-width: 70px;
+  border-radius: 16px;
   background: var(--card); 
   display: flex;
   flex-direction: column;
@@ -68,7 +70,7 @@ body {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-x: hidden;
   overflow-y: auto;
-  height: 100vh;
+  max-height: calc(100vh - 20px);
   position: relative;
   z-index: 100;
 }
@@ -137,7 +139,7 @@ nav.tabs-sidebar {
   color: var(--text1); 
   border: 1px solid transparent;
   padding: 8px; 
-  border-radius: 20px; 
+  border-radius: 50px; 
   cursor: pointer; 
   transition: all 0.3s; 
   display: flex; 
@@ -189,7 +191,7 @@ nav.tabs-sidebar {
     =========================== */
 .attack-section {
   width: 100%;
-  border-radius: 20px;
+  border-radius: 50px;
   padding-top: 16px;
   margin-top: 8px;
   flex-shrink: 0;
@@ -201,7 +203,7 @@ nav.tabs-sidebar {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
-  text-align: center;
+  text-align: start;
   display: none;
 }
 
@@ -223,7 +225,7 @@ nav.tabs-sidebar {
   color: var(--text1);
   border: 1px solid transparent;
   padding: 8px;
-  border-radius: 20px;
+  border-radius: 50px;
   cursor: pointer;
   font-weight: 600;
   font-size: 13px;
@@ -253,7 +255,7 @@ nav.tabs-sidebar {
   color: var(--text1);
   border: 1px solid transparent;
   padding: 8px;
-  border-radius: 20px;
+  border-radius: 50px;
   cursor: pointer;
   font-weight: 600;
   font-size: 13px;
@@ -270,7 +272,6 @@ nav.tabs-sidebar {
 .mitigation-btn:hover {
   transform: translateY(-2px);
   background: var(--bg3);
-  border-color: var(--success); /* Adicionado para corrigir o bug anterior */
 }
 
 .mitigation-btn.active {
@@ -311,56 +312,6 @@ nav.tabs-sidebar {
   }
 }
 
-/* Filtros */
-.filters { 
-  display: none; 
-  flex-direction: column; 
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid var(--glass);
-  width: 100%;
-  margin-top: auto;
-  flex-shrink: 0;
-}
-
-.sidebar.expanded .filters { 
-  display: flex; 
-}
-
-.filters label { 
-  color: var(--muted); 
-  font-size: 13px;
-  margin-bottom: 4px;
-  display: block;
-}
-
-.filters select, 
-.filters input { 
-  background: var(--bg2); 
-  color: var(--text); 
-  border: 1px solid var(--glass); 
-  padding: 8px; 
-  border-radius: 6px; 
-  font-size: 13px;
-  width: 100%;
-}
-
-.filters button.primary { 
-  background: linear-gradient(90deg, var(--accent), var(--accent3)); 
-  color: var(--bg); 
-  font-weight: 700; 
-  border: none; 
-  padding: 10px; 
-  border-radius: 6px; 
-  cursor: pointer;
-  width: 100%;
-  transition: all 0.3s;
-}
-
-.filters button.primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(93, 227, 250, 0.4);
-}
 
 /* ===========================
     CONTEÚDO PRINCIPAL
@@ -419,6 +370,7 @@ main {
   grid-row: 3;
 }
 
+
 /* Tendências - Grid Responsivo */
 #page-tendencias {
   flex: 1;
@@ -442,6 +394,12 @@ main {
   grid-column: 1 / 3;
 }
 
+#page-tendencias .logs-card {
+  grid-column: 1 / 3;
+  /* Removendo grid-row fixo para que o card de logs apareça no final do fluxo do grid */
+  /* grid-row: 3; */
+}
+
 /* Altura dos gráficos dentro dos cards */
 #page-tendencias .chart-container {
   height: 280px;
@@ -456,6 +414,26 @@ main {
   width: 100% !important;
   height: 100% !important;
 }
+
+/* Altura dos gráficos dentro dos cards */
+/* Removendo altura fixa do card-full na aba de análise detalhada para que ele se ajuste ao conteúdo */
+/* #page-tendencias .card-full {
+  height: 280px;
+  margin-top: 8px;
+  position: relative;
+} */
+#page-tendencias .card-full > div[style*="height"] {
+  height: 280px !important;
+}
+
+/* Removendo a regra de posicionamento absoluto para o canvas do gráfico geral, já que ele está dentro de um div com altura fixa */
+/* #page-tendencias .card-full canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+} */
 
 /* Colunas */
 .col { 
@@ -587,7 +565,7 @@ main {
 }
 
 .kpi-compact:hover {
-  transform: translateY(-2px);
+  transform: translateY(2px);
   box-shadow: 0 4px 16px rgba(250, 164, 92, 0.2);
 }
 
@@ -760,7 +738,7 @@ th {
   }
   
   .sidebar { 
-    height: 100vh;
+    height: auto;
     border-right: 1px solid var(--bg2); 
   }
 }
@@ -849,10 +827,6 @@ th {
 
   .attack-section {
     display: none;
-  }
-  
-  .filters { 
-    display: none !important;
   }
   
   .main-content { 
@@ -1034,5 +1008,278 @@ th {
 
   #page-tendencias .chart-container {
     height: 200px;
+  }
+}
+
+/* ===========================
+    MEDIA QUERIES - LANDSCAPE MOBILE
+    =========================== */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  .sidebar {
+    max-height: 60px;
+    padding: 6px;
+  }
+
+  .main-content {
+    padding: 10px;
+  }
+
+  .topologia-container {
+    height: 30vh;
+    max-height: 140px;
+  }
+
+  #page-tendencias .chart-container {
+    height: 200px;
+  }
+}
+
+/* ===========================
+    MEDIA QUERIES - LARGE SCREENS (TV/ULTRA-WIDE)
+    =========================== */
+@media (min-width: 1920px) {
+  :root {
+    --gap: 20px;
+    --radius: 14px;
+    font-size: 18px;
+  }
+
+  .sidebar {
+    margin: 16px 0 16px 16px;
+    width: 90px;
+    min-width: 90px;
+    padding: 24px 12px;
+    gap: 20px;
+  }
+
+  .sidebar.expanded {
+    width: 300px;
+    min-width: 300px;
+  }
+
+  .sidebar-logo {
+    max-width: 240px;
+  }
+
+  .tab {
+    padding: 12px;
+    font-size: 16px;
+  }
+
+  .tab-icon {
+    font-size: 28px;
+    min-width: 32px;
+  }
+
+  .attack-btn,
+  .mitigation-btn {
+    padding: 12px;
+    font-size: 15px;
+  }
+
+  .btn-icon {
+    font-size: 20px;
+  }
+
+  .main-content {
+    padding: 32px;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  #page-visao-geral {
+    grid-template-columns: minmax(400px, 1.3fr) minmax(350px, 1fr);
+    gap: 20px;
+  }
+
+  .kpis-compact {
+    gap: 16px;
+  }
+
+  .kpi-compact {
+    padding: 16px 18px;
+    min-height: clamp(110px, 12vh, 140px);
+  }
+
+  .kpi-compact .label {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .kpi-compact .value {
+    font-size: 32px;
+  }
+
+  .kpi-compact .unit {
+    font-size: 16px;
+  }
+
+  .kpi-compact .status-indicator {
+    width: 10px;
+    height: 10px;
+  }
+
+  .topologia-container {
+    height: 35vh;
+    max-height: 400px;
+    min-height: 280px;
+  }
+
+  #page-tendencias {
+    gap: 20px;
+  }
+
+  #page-tendencias .chart-container {
+    height: 400px;
+  }
+
+  #page-tendencias .card-full > div[style*="height"] {
+    height: 400px !important;
+  }
+
+  table {
+    font-size: 15px;
+  }
+
+  th, td {
+    padding: 12px;
+  }
+
+  .card strong {
+    font-size: 20px;
+  }
+
+  .small {
+    font-size: 14px;
+  }
+}
+
+/* ===========================
+    MEDIA QUERIES - EXTRA LARGE SCREENS (4K TV)
+    =========================== */
+    
+@media (min-width: 2560px) {
+  :root {
+    --gap: 24px;
+    --radius: 16px;
+    font-size: 20px;
+  }
+
+  .sidebar {
+    margin: 20px 0 20px 20px;
+    width: 110px;
+    min-width: 110px;
+    padding: 32px 16px;
+    gap: 24px;
+  }
+
+  .sidebar.expanded {
+    width: 360px;
+    min-width: 360px;
+  }
+
+  .sidebar-logo {
+    max-width: 280px;
+  }
+
+  .tab {
+    padding: 16px;
+    font-size: 18px;
+  }
+
+  .tab-icon {
+    font-size: 32px;
+    min-width: 40px;
+  }
+
+  .attack-btn,
+  .mitigation-btn {
+    padding: 16px;
+    font-size: 17px;
+  }
+
+  .btn-icon {
+    font-size: 24px;
+  }
+
+  .main-content {
+    padding: 40px;
+  }
+
+  .card {
+    padding: 28px;
+  }
+
+  #page-visao-geral {
+    grid-template-columns: minmax(500px, 1.4fr) minmax(450px, 1fr);
+    gap: 24px;
+  }
+
+  .kpis-compact {
+    gap: 20px;
+  }
+
+  .kpi-compact {
+    padding: 20px 24px;
+    min-height: clamp(140px, 14vh, 180px);
+    border-radius: 12px;
+  }
+
+  .kpi-compact .label {
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+
+  .kpi-compact .value {
+    font-size: 40px;
+  }
+
+  .kpi-compact .unit {
+    font-size: 18px;
+  }
+
+  .kpi-compact .status-indicator {
+    width: 12px;
+    height: 12px;
+  }
+
+  .topologia-container {
+    height: 40vh;
+    max-height: 500px;
+    min-height: 350px;
+  }
+
+  #page-tendencias {
+    gap: 24px;
+  }
+
+  #page-tendencias .chart-container {
+    height: 500px;
+  }
+
+  #page-tendencias .card-full > div[style*="height"] {
+    height: 500px !important;
+  }
+
+  table {
+    font-size: 17px;
+  }
+
+  th, td {
+    padding: 16px;
+  }
+
+  .card strong {
+    font-size: 24px;
+  }
+
+  .small {
+    font-size: 16px;
+  }
+
+  .stat-value {
+    font-size: 32px;
   }
 }

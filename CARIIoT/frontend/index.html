@@ -19,7 +19,12 @@
   <!-- Biblioteca de gráficos Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
+  <!-- CSS -->
   <link rel="stylesheet" href="css/style.css">
+
+  <!-- Biblioteca de ícones Lordicon -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
 </head>
 <body>
   <!-- Container principal da aplicação -->
@@ -36,25 +41,33 @@
       <!-- Abas de navegação -->
       <nav class="tabs-sidebar" role="tablist" aria-label="Abas">
         <button class="tab active" data-tab="visao-geral" role="tab" aria-selected="true">
-          <span class="tab-icon">📊</span>
+          <span class="tab-icon">
+            <i data-lucide="layout-dashboard" size="24" color="#696B7A"></i>
+          </span>
           <span class="tab-label">Visão Geral</span>
         </button>
         <button class="tab" data-tab="tendencias" role="tab">
-          <span class="tab-icon">📈</span>
-          <span class="tab-label">Tendências & Análises</span>
+          <span class="tab-icon">
+           <i data-lucide="chart-no-axes-column" size="24" color="#696B7A"></i>
+          </span>
+          <span class="tab-label">Análise Detalhada</span>
         </button>
       </nav>
 
       <!-- Seção de Ataques -->
       <div class="attack-section">
-        <div class="attack-section-title">⚠️ Ataques</div>
+        <div class="attack-section-title">Ataques</div>
         <div class="attack-buttons">
           <button class="attack-btn" id="attackFlood" data-attack="flood">
-            <span class="btn-icon">🌊</span>
+            <span class="btn-icon">
+              <i data-lucide="waves" size="24" color="#f11c1c"></i>
+            </span>
             <span class="btn-label">Flood</span>
           </button>
           <button class="attack-btn" id="attackDos" data-attack="dos">
-            <span class="btn-icon">💥</span>
+            <span class="btn-icon">
+              <i data-lucide="package" size="24" color="#f11c1c"></i>
+            </span>
             <span class="btn-label">DoS</span>
           </button>
         </div>
@@ -62,29 +75,23 @@
 
       <!-- Seção de Mitigações -->
       <div class="attack-section">
-        <div class="attack-section-title">🛡️ Mitigações</div>
+        <div class="attack-section-title">Mitigações</div>
         <div class="attack-buttons">
           <button class="mitigation-btn" id="mitigateFlood" data-mitigation="flood">
-            <span class="btn-icon">🔒</span>
+            <span class="btn-icon">
+              <i data-lucide="shield-half" size="24" color="#73B0BA"></i>
+            </span>
             <span class="btn-label">Anti-Flood</span>
           </button>
           <button class="mitigation-btn" id="mitigateDos" data-mitigation="dos">
-            <span class="btn-icon">🛡️</span>
+            <span class="btn-icon">
+              <i data-lucide="lock" size="24" color="#73B0BA"></i>
+            </span>
             <span class="btn-label">Anti-DoS</span>
           </button>
         </div>
       </div>
 
-      <!-- Filtros e ações principais -->
-      <div class="filters" role="region" aria-label="Filtros e Ações">
-        <label class="small" for="timeRange">Período</label>
-        <select id="timeRange" aria-label="Últimos X minutos">
-          <option value="5">5 minutos</option>
-          <option value="15" selected>15 minutos</option>
-          <option value="60">1 hora</option>
-          <option value="1440">24 horas</option>
-        </select>
-      </div>
     </aside>
 
     <!-- ===== Área principal do dashboard ===== -->
@@ -96,14 +103,14 @@
           <!-- Gráficos à esquerda empilhados -->
           <div class="graphs-column">
             <div class="card">
-              <strong>Temperatura ao Longo do Tempo</strong>
+              <strong>Gráfico de Temperatura</strong>
               <div style="height:180px; margin-top:8px;">
                 <canvas id="tempChart" aria-label="Temperatura"></canvas>
               </div>
             </div>
 
             <div class="card">
-              <strong>Utilização de Recursos</strong>
+              <strong>Gráfico de Recursos</strong>
               <div style="height:180px; margin-top:8px;">
                 <canvas id="resourceChart" aria-label="CPU e Memória"></canvas>
               </div>
@@ -195,24 +202,18 @@
           </div>
         </section>
 
-        <!-- ABA TENDÊNCIAS -->
-        <section id="page-tendencias" class="col wide" aria-label="Tendências & Análises" style="display:none;">
+        <!-- ABA ANALISE -->
+        <section id="page-tendencias" class="col wide" aria-label="Análise Detalhada" style="display:none;">
           <div class="card card-full">
-            <strong>Análise de Tendências</strong>
-            <div class="small">Comparativo de períodos e padrões de comportamento</div>
+            <strong>Análise Detalhada</strong>
+            <div class="small">Visualização detalhada do tráfego e das métricas do sistema.</div>
           </div>
 
-          <div class="card">
-            <strong>Temperatura - Últimas 24h vs 24-48h</strong>
-            <div class="chart-container">
-              <canvas id="tempCompareChart"></canvas>
-            </div>
-          </div>
-
-          <div class="card">
-            <strong>Recursos do Sistema - Comparativo</strong>
-            <div class="chart-container">
-              <canvas id="resourceCompareChart"></canvas>
+          <!-- Gráfico geral acima -->
+          <div class="card card-full">
+            <strong>Gráfico Geral</strong>
+            <div style="height:300px; margin-top:8px;">
+              <canvas id="generalChart"></canvas>
             </div>
           </div>
 
@@ -227,28 +228,6 @@
             <strong>Análise de Eventos</strong>
             <div class="chart-container">
               <canvas id="eventAnalysisChart"></canvas>
-            </div>
-          </div>
-
-          <div class="card card-full">
-            <strong>Estatísticas de Operação</strong>
-            <div class="stats-grid">
-              <div class="stat-item">
-                <div class="small">Tempo Bomba Ativa</div>
-                <div id="statBombaAtiva" class="stat-value accent">—</div>
-              </div>
-              <div class="stat-item">
-                <div class="small">Temp. Média</div>
-                <div id="statTempMedia" class="stat-value accent2">—</div>
-              </div>
-              <div class="stat-item">
-                <div class="small">CPU Média</div>
-                <div id="statCpuMedia" class="stat-value accent3">—</div>
-              </div>
-              <div class="stat-item">
-                <div class="small">Msgs Inválidas</div>
-                <div id="statMsgsInvalidas" class="stat-value danger">—</div>
-              </div>
             </div>
           </div>
         </section>

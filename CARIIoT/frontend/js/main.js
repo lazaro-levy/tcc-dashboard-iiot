@@ -36,7 +36,6 @@ const pages = {
 };
 const sidebar = document.getElementById('sidebar');
 const sidebarToggle = document.getElementById('sidebarToggle');
-const timeRange = document.getElementById('timeRange');
 // const refreshBtn = document.getElementById('refreshBtn'); // Removido: Botão Atualizar não é mais necessário
 
 /* ==========================
@@ -51,8 +50,6 @@ sidebarToggle.addEventListener('click', () => {
     // Se usa Chart.js, chame resize nos gráficos existentes
     if (tempChart) tempChart.resize();
     if (resourceChart) resourceChart.resize();
-    if (tempCompareChart) tempCompareChart.resize();
-    if (resourceCompareChart) resourceCompareChart.resize();
     if (msgRateChart) msgRateChart.resize();
     if (eventAnalysisChart) eventAnalysisChart.resize();
   }, 320); // um pouco maior que a transição de 300ms
@@ -63,10 +60,9 @@ sidebarToggle.addEventListener('click', () => {
    ========================== */
 let tempChart = null;
 let resourceChart = null;
-let tempCompareChart = null;
-let resourceCompareChart = null;
 let msgRateChart = null;
 let eventAnalysisChart = null;
+let generalChart = null;
 
 /* ==========================
    FUNÇÃO AUXILIAR PARA CORES
@@ -84,16 +80,16 @@ function renderKPIs() {
   console.log('📊 Renderizando KPIs...');
   
   const { fisico, virtual } = window.DATA;
-  const { monitoramento } = virtual;
+  const { monitoramento, operacional } = virtual;
   
   // Temperatura
   const tempElement = document.querySelector('#kpiTemperatura span:first-child');
   const tempIndicator = document.querySelector('#kpiTemperatura .status-indicator');
-  tempElement.textContent = fisico.temperatura.toFixed(1);
+  tempElement.textContent = operacional.temperatura.toFixed(1);
   
-  if (fisico.temperatura < 34) {
+  if (operacional.temperatura < 34) {
     tempIndicator.className = 'status-indicator status-ok';
-  } else if (fisico.temperatura < 70) {
+  } else if (operacional.temperatura < 70) {
     tempIndicator.className = 'status-indicator status-warning';
   } else {
     tempIndicator.className = 'status-indicator status-critical';
@@ -102,11 +98,11 @@ function renderKPIs() {
   // Nível
   const nivelElement = document.querySelector('#kpiNivel span:first-child');
   const nivelIndicator = document.querySelector('#kpiNivel .status-indicator');
-  nivelElement.textContent = (fisico.nivel * 100).toFixed(0);
+  nivelElement.textContent = (operacional.nivel * 100).toFixed(0);
   
-  if (fisico.nivel > 0.7) {
+  if (operacional.nivel > 0.7) {
     nivelIndicator.className = 'status-indicator status-ok';
-  } else if (fisico.nivel > 0.3) {
+  } else if (operacional.nivel > 0.3) {
     nivelIndicator.className = 'status-indicator status-warning';
   } else {
     nivelIndicator.className = 'status-indicator status-critical';
@@ -115,8 +111,8 @@ function renderKPIs() {
   // Bomba
   const bombaElement = document.querySelector('#kpiBomba span:first-child');
   const bombaIndicator = document.querySelector('#kpiBomba .status-indicator');
-  bombaElement.textContent = fisico.bomba;
-  bombaIndicator.className = fisico.bomba === 'ON' 
+  bombaElement.textContent = operacional.bomba;
+  bombaIndicator.className = operacional.bomba === 'ON' 
     ? 'status-indicator status-ok' 
     : 'status-indicator status-warning';
   
@@ -247,7 +243,7 @@ function renderResourceChart() {
           {
             label: 'Memória (%)',
             data: memoria,
-            borderColor: themeColor('--accent3'),
+            borderColor: themeColor('--accent4'),
             backgroundColor: 'rgba(115,176,186,0.1)',
             tension: 0.4
           }
@@ -266,6 +262,114 @@ function renderResourceChart() {
             max: 100
           },
           x: { 
+            ticks: { color: themeColor('--muted') },
+            grid: { color: themeColor('--glass') }
+          }
+        }
+      }
+    });
+  }
+}
+
+/* ==========================
+   GRÁFICO GERAL DO SISTEMA
+   ========================== */
+
+function renderGeneralChart() {
+  console.log('📊 Renderizando gráfico geral...');
+  
+  const hist = window.DATA.historico.slice(-60);
+  const labels = hist.map(h => new Date(h.timestamp).toLocaleTimeString());
+  
+  const ctx = document.getElementById('generalChart').getContext('2d');
+  
+  if (generalChart) {
+    generalChart.data.labels = labels;
+    generalChart.data.datasets[0].data = hist.map(h => h.temperatura);
+    generalChart.data.datasets[1].data = hist.map(h => h.cpu);
+    generalChart.data.datasets[2].data = hist.map(h => h.memoria);
+    generalChart.data.datasets[3].data = hist.map(h => h.nivel * 100);
+    generalChart.update();
+  } else {
+    generalChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Temperatura (°C)',
+            data: hist.map(h => h.temperatura),
+            borderColor: themeColor('--accent2'),
+            backgroundColor: 'rgba(250,164,92,0.1)',
+            tension: 0.4,
+            yAxisID: 'y'
+          },
+          {
+            label: 'CPU (%)',
+            data: hist.map(h => h.cpu),
+            borderColor: themeColor('--accent'),
+            backgroundColor: 'rgba(93,227,250,0.1)',
+            tension: 0.4,
+            yAxisID: 'y1'
+          },
+          {
+            label: 'Memória (%)',
+            data: hist.map(h => h.memoria),
+            borderColor: themeColor('--accent4'),
+            backgroundColor: 'rgba(115,176,186,0.1)',
+            tension: 0.4,
+            yAxisID: 'y1'
+          },
+          {
+            label: 'Nível (%)',
+            data: hist.map(h => h.nivel * 100),
+            borderColor: '#a58a74',
+            backgroundColor: 'rgba(34,197,94,0.1)',
+            tension: 0.4,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: { 
+            display: true, 
+            labels: { color: themeColor('--text') }
+          }
+        },
+        scales: {
+          y: {
+            type: 'linear',
+            display: true,
+            position: 'left',
+            title: {
+              display: true,
+              text: 'Temperatura (°C)',
+              color: themeColor('--accent2')
+            },
+            ticks: { color: themeColor('--muted') },
+            grid: { color: themeColor('--glass') }
+          },
+          y1: {
+            type: 'linear',
+            display: true,
+            position: 'right',
+            title: {
+              display: true,
+              text: 'Percentual (%)',
+              color: themeColor('--accent')
+            },
+            ticks: { color: themeColor('--muted') },
+            grid: { drawOnChartArea: false },
+            max: 100
+          },
+          x: {
             ticks: { color: themeColor('--muted') },
             grid: { color: themeColor('--glass') }
           }
@@ -391,130 +495,6 @@ function renderSimImage() {
    GRÁFICOS DE TENDÊNCIAS
    ========================== */
 
-function renderTempCompareChart() {
-  const hist = window.DATA.historico;
-  const now = Date.now();
-  
-  const last24h = hist.filter(h => h.timestamp > now - 24*3600*1000);
-  const prev24h = hist.filter(h => h.timestamp > now - 48*3600*1000 && h.timestamp <= now - 24*3600*1000);
-  
-  const labels = Array.from({length: 24}, (_, i) => `${i}h`);
-  const data1 = Array(24).fill(0);
-  const data2 = Array(24).fill(0);
-  
-  last24h.forEach(h => {
-    const hour = 23 - Math.floor((now - h.timestamp) / 3600000);
-    if (hour >= 0 && hour < 24) data1[hour] = h.temperatura;
-  });
-  
-  prev24h.forEach(h => {
-    const hour = 23 - Math.floor((now - 24*3600*1000 - h.timestamp) / 3600000);
-    if (hour >= 0 && hour < 24) data2[hour] = h.temperatura;
-  });
-  
-  const ctx = document.getElementById('tempCompareChart').getContext('2d');
-  
-  if (tempCompareChart) {
-    tempCompareChart.data.datasets[0].data = data1;
-    tempCompareChart.data.datasets[1].data = data2;
-    tempCompareChart.update();
-  } else {
-    tempCompareChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            label: 'Últimas 24h',
-            data: data1,
-            borderColor: themeColor('--accent2'),
-            backgroundColor: 'rgba(250,164,92,0.1)',
-            tension: 0.4
-          },
-          {
-            label: '24-48h atrás',
-            data: data2,
-            borderColor: themeColor('--accent3'),
-            backgroundColor: 'rgba(115,176,186,0.1)',
-            tension: 0.4
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: themeColor('--text') } } },
-        scales: {
-          y: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') } },
-          x: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') } }
-        }
-      }
-    });
-  }
-}
-
-function renderResourceCompareChart() {
-  const hist = window.DATA.historico;
-  const now = Date.now();
-  
-  const last24h = hist.filter(h => h.timestamp > now - 24*3600*1000);
-  const prev24h = hist.filter(h => h.timestamp > now - 48*3600*1000 && h.timestamp <= now - 24*3600*1000);
-  
-  const labels = Array.from({length: 24}, (_, i) => `${i}h`);
-  const cpu1 = Array(24).fill(0);
-  const cpu2 = Array(24).fill(0);
-  
-  last24h.forEach(h => {
-    const hour = 23 - Math.floor((now - h.timestamp) / 3600000);
-    if (hour >= 0 && hour < 24) cpu1[hour] = h.cpu;
-  });
-  
-  prev24h.forEach(h => {
-    const hour = 23 - Math.floor((now - 24*3600*1000 - h.timestamp) / 3600000);
-    if (hour >= 0 && hour < 24) cpu2[hour] = h.cpu;
-  });
-  
-  const ctx = document.getElementById('resourceCompareChart').getContext('2d');
-  
-  if (resourceCompareChart) {
-    resourceCompareChart.data.datasets[0].data = cpu1;
-    resourceCompareChart.data.datasets[1].data = cpu2;
-    resourceCompareChart.update();
-  } else {
-    resourceCompareChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            label: 'CPU Últimas 24h',
-            data: cpu1,
-            borderColor: themeColor('--accent'),
-            backgroundColor: 'rgba(93,227,250,0.1)',
-            tension: 0.4
-          },
-          {
-            label: 'CPU 24-48h atrás',
-            data: cpu2,
-            borderColor: themeColor('--accent3'),
-            backgroundColor: 'rgba(115,176,186,0.1)',
-            tension: 0.4
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: themeColor('--text') } } },
-        scales: {
-          y: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') }, max: 100 },
-          x: { ticks: { color: themeColor('--muted') }, grid: { color: themeColor('--glass') } }
-        }
-      }
-    });
-  }
-}
-
 function renderMsgRateChart() {
   const hist = window.DATA.historico.slice(-60);
   const labels = hist.map(h => new Date(h.timestamp).toLocaleTimeString());
@@ -592,26 +572,6 @@ function renderEventAnalysisChart() {
   }
 }
 
-function renderStats() {
-  const hist = window.DATA.historico;
-  
-  // Tempo bomba ativa
-  const bombaOn = hist.filter(h => h.bomba === 'ON').length;
-  document.getElementById('statBombaAtiva').textContent = Math.round((bombaOn / hist.length) * 100) + '%';
-  
-  // Temp média
-  const avgTemp = hist.reduce((sum, h) => sum + h.temperatura, 0) / hist.length;
-  document.getElementById('statTempMedia').textContent = avgTemp.toFixed(1) + '°C';
-  
-  // CPU média
-  const avgCpu = hist.reduce((sum, h) => sum + h.cpu, 0) / hist.length;
-  document.getElementById('statCpuMedia').textContent = avgCpu.toFixed(1) + '%';
-  
-  // Msgs inválidas
-  const totalInvalid = hist.reduce((sum, h) => sum + (h.msgs_invalidas || 0), 0);
-  document.getElementById('statMsgsInvalidas').textContent = totalInvalid;
-}
-
 /* ==========================
    CONTROLE DE ATAQUES - VERSÃO NGROK
    ========================== */
@@ -667,20 +627,20 @@ async function executeScript(endpoint, body = null) {
 attackFloodBtn.addEventListener('click', async () => {
   try {
     attackFloodBtn.disabled = true;
-    attackFloodBtn.textContent = attackState.flood ? 'Parando...' : 'Iniciando...';
+    // attackFloodBtn.textContent = attackState.flood ? 'Parando...' : 'Iniciando...';
     
     if (attackState.flood) {
       const result = await executeScript("/executar", { acao: "flood", tipo: "stop" });
       attackState.flood = false;
       attackFloodBtn.classList.remove('active');
-      attackFloodBtn.textContent = 'Iniciar Flood Attack';
+      // attackFloodBtn.textContent = 'Flood';
       console.log("✅ Ataque Flood parado", result);
       alert("✅ Ataque Flood parado");
     } else {
       const result = await executeScript("/executar", { acao: "flood", tipo: "start" });
       attackState.flood = true;
       attackFloodBtn.classList.add('active');
-      attackFloodBtn.textContent = 'Parar Flood Attack';
+      // attackFloodBtn.textContent = 'Flood';
       console.log("⚠️ Ataque Flood iniciado", result);
       alert("⚠️ Ataque Flood iniciado");
     }
@@ -695,20 +655,20 @@ attackFloodBtn.addEventListener('click', async () => {
 attackDosBtn.addEventListener('click', async () => {
   try {
     attackDosBtn.disabled = true;
-    attackDosBtn.textContent = attackState.dos ? 'Parando...' : 'Iniciando...';
+    // attackDosBtn.textContent = attackState.dos ? 'Parando...' : 'Iniciando...';
     
     if (attackState.dos) {
       const result = await executeScript("/executar", { acao: "dos", tipo: "stop" });
       attackState.dos = false;
       attackDosBtn.classList.remove('active');
-      attackDosBtn.textContent = 'Iniciar DoS Attack';
+      // attackDosBtn.textContent = 'DoS';
       console.log("✅ Ataque DoS parado", result);
       alert("✅ Ataque DoS parado");
     } else {
       const result = await executeScript("/executar", { acao: "dos", tipo: "start" });
       attackState.dos = true;
       attackDosBtn.classList.add('active');
-      attackDosBtn.textContent = 'Parar DoS Attack';
+      // attackDosBtn.textContent = 'DoS';
       console.log("⚠️ Ataque DoS iniciado", result);
       alert("⚠️ Ataque DoS iniciado");
     }
@@ -723,7 +683,7 @@ attackDosBtn.addEventListener('click', async () => {
 mitigateFloodBtn.addEventListener("click", async () => {
   try {
     mitigateFloodBtn.disabled = true;
-    mitigateFloodBtn.textContent = 'Ativando...';
+    // mitigateFloodBtn.textContent = 'Ativando...';
     
     const result = await executeScript("/executar", { acao: "mitigacao_flood", tipo: "start" });
     console.log("Mitigação Flood:", result);
@@ -732,7 +692,7 @@ mitigateFloodBtn.addEventListener("click", async () => {
       await executeScript("/executar", { acao: "flood", tipo: "stop" });
       attackState.flood = false;
       attackFloodBtn.classList.remove("active");
-      attackFloodBtn.textContent = 'Iniciar Flood Attack';
+      // attackFloodBtn.textContent = 'Flood';
     }
 
     alert("🛡️ Mitigação Flood ativada com sucesso!\nO cenário será resetado em 10 segundos.");
@@ -741,7 +701,7 @@ mitigateFloodBtn.addEventListener("click", async () => {
     alert("❌ Erro na mitigação Flood: " + error.message);
   } finally {
     mitigateFloodBtn.disabled = false;
-    mitigateFloodBtn.textContent = 'Mitigar Flood';
+    // mitigateFloodBtn.textContent = 'Flood';
   }
 });
 
@@ -749,7 +709,7 @@ mitigateFloodBtn.addEventListener("click", async () => {
 mitigateDosBtn.addEventListener("click", async () => {
   try {
     mitigateDosBtn.disabled = true;
-    mitigateDosBtn.textContent = 'Ativando...';
+    // mitigateDosBtn.textContent = 'Ativando...';
     
     const result = await executeScript("/executar", { acao: "mitigacao_dos", tipo: "start" });
     console.log("Mitigação DoS:", result);
@@ -758,7 +718,7 @@ mitigateDosBtn.addEventListener("click", async () => {
       await executeScript("/executar", { acao: "dos", tipo: "stop" });
       attackState.dos = false;
       attackDosBtn.classList.remove("active");
-      attackDosBtn.textContent = 'Iniciar DoS Attack';
+      // attackDosBtn.textContent = 'DoS';
     }
 
     alert("🛡️ Mitigação DoS ativada com sucesso!\nO cenário será resetado em 10 segundos.");
@@ -767,7 +727,7 @@ mitigateDosBtn.addEventListener("click", async () => {
     alert("❌ Erro na mitigação DoS: " + error.message);
   } finally {
     mitigateDosBtn.disabled = false;
-    mitigateDosBtn.textContent = 'Mitigar DoS';
+    // mitigateDosBtn.textContent = 'Mitigar DoS';
   }
 });
 
@@ -819,21 +779,6 @@ function showConnectionStatus(connected, url) {
     document.body.appendChild(statusElement);
   }
   
-  if (connected) {
-    statusElement.style.background = '#27ae60';
-    statusElement.style.color = 'white';
-    statusElement.innerHTML = `
-      ✅ Conectado<br>
-      <small>${url.replace('https://', '')}</small>
-    `;
-  } else {
-    statusElement.style.background = '#e74c3c';
-    statusElement.style.color = 'white';
-    statusElement.innerHTML = `
-      ❌ Sem conexão<br>
-      <small>${url}</small>
-    `;
-  }
 }
 
 // Função para verificar status dos processos
@@ -847,12 +792,12 @@ async function checkProcessStatus() {
       if (processo.nome === 'ataque_flood' && processo.ativo) {
         attackState.flood = true;
         attackFloodBtn.classList.add('active');
-        attackFloodBtn.textContent = 'Parar Flood Attack';
+        // attackFloodBtn.textContent = 'Parar Flood Attack';
       }
       if (processo.nome === 'ataque_dos' && processo.ativo) {
         attackState.dos = true;
         attackDosBtn.classList.add('active');
-        attackDosBtn.textContent = 'Parar DoS Attack';
+        // attackDosBtn.textContent = 'Parar DoS Attack';
       }
     });
     
@@ -913,8 +858,7 @@ function renderActiveTab() {
       renderSimImage();
       break;
     case 'tendencias':
-      renderTempCompareChart();
-      renderResourceCompareChart();
+      renderGeneralChart();
       renderMsgRateChart();
       renderEventAnalysisChart();
       renderStats();
@@ -954,7 +898,7 @@ function subscribeFirebase() {
       // Adiciona ao histórico
       const entrada = {
         timestamp: val.virtual?.monitoramento?.timestamp || Date.now(),
-        temperatura: val.fisico?.temperatura || 0,
+        temperatura: val.virtual?.operacional?.temperatura || 0,
         nivel: val.fisico?.nivel || 0,
         bomba: val.fisico?.bomba || 'OFF',
         cpu: val.virtual?.monitoramento?.sistema?.cpu || 0,
@@ -1033,3 +977,6 @@ logo.addEventListener('error', () => {
 logo.addEventListener('load', () => {
   console.log('✅ Logo carregada com sucesso!');
 });
+
+// Inicializa os ícones Lucide
+lucide.createIcons();
