@@ -10,6 +10,7 @@
   --accent2: #fAA45C;
   --accent3: #73B0BA;
   --accent4: #2a4449;
+  --accent5: #A58A74;
   --danger: #f11c1c;
   --success: #22c55e;
   --muted: #696B7A;
@@ -80,20 +81,39 @@ body {
   min-width: 240px;
 }
 
-/* Logo */
-.sidebar-logo { 
-  opacity: 0;
-  max-height: 0; /* Esconde a logo no estado colapsado */
-  overflow: hidden; 
-  transition: all 0.3s ease;
-  width: 100%; /* Garante que a largura seja 100% do container */
-  max-width: 180px; /* Limite máximo de largura */
+/* Logo Container */
+.sidebar-logo-container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  min-height: 48px;
 }
 
-.sidebar.expanded .sidebar-logo {
-  opacity: 1;
-  max-height: 200px; /* Valor grande o suficiente para a logo aparecer */
-  margin-bottom: 8px;
+/* Logo Completa (expandida) */
+.sidebar-logo-full {
+  display: none;
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+}
+
+.sidebar.expanded .sidebar-logo-full {
+  display: block;
+}
+
+/* Logo Ícone (retraída) */
+.sidebar-logo-icon {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.sidebar.expanded .sidebar-logo-icon {
+  display: none;
 }
 
 canvas {
@@ -681,9 +701,9 @@ th {
     =========================== */
 
 .topologia-container {
-  height: 25vh;
-  max-height: 250px;
-  min-height: 180px;
+  height: 40vh;
+  max-height: 450px;
+  min-height: 300px;
   margin-top: 12px;
   border-radius: 8px;
   overflow: hidden;
@@ -691,24 +711,26 @@ th {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
  
 #simImage {
-  border: 1px solid var(--glass);
-  border-radius: 8px;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg2);
+  background: linear-gradient(135deg, var(--bg2) 0%, var(--bg) 100%);
+  position: relative;
 }
 
 #simImage svg {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+}
+
+#simImage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* ===========================

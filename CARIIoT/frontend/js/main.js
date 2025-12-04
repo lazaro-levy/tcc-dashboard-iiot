@@ -36,7 +36,6 @@ const pages = {
 };
 const sidebar = document.getElementById('sidebar');
 const sidebarToggle = document.getElementById('sidebarToggle');
-// const refreshBtn = document.getElementById('refreshBtn'); // Removido: Botão Atualizar não é mais necessário
 
 /* ==========================
    SIDEBAR RETRÁTIL
@@ -63,6 +62,15 @@ let resourceChart = null;
 let msgRateChart = null;
 let eventAnalysisChart = null;
 let generalChart = null;
+
+/* ==========================
+   TOPOLOGIA DE REDE - VIS.JS
+   ========================== */
+
+// Variáveis globais para a topologia
+let networkInstance = null;
+let networkNodes = null;
+let networkEdges = null;
 
 /* ==========================
    FUNÇÃO AUXILIAR PARA CORES
@@ -243,7 +251,7 @@ function renderResourceChart() {
           {
             label: 'Memória (%)',
             data: memoria,
-            borderColor: themeColor('--accent4'),
+            borderColor: themeColor('--accent5'),
             backgroundColor: 'rgba(115,176,186,0.1)',
             tension: 0.4
           }
@@ -315,44 +323,25 @@ function renderGeneralChart() {
           {
             label: 'Memória (%)',
             data: hist.map(h => h.memoria),
-            borderColor: themeColor('--accent4'),
+            borderColor: themeColor('--accent5'),
             backgroundColor: 'rgba(115,176,186,0.1)',
             tension: 0.4,
             yAxisID: 'y1'
           },
-          {
-            label: 'Nível (%)',
-            data: hist.map(h => h.nivel * 100),
-            borderColor: '#a58a74',
-            backgroundColor: 'rgba(34,197,94,0.1)',
-            tension: 0.4,
-            yAxisID: 'y1'
-          }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: {
-          mode: 'index',
-          intersect: false
-        },
         plugins: {
-          legend: { 
-            display: true, 
-            labels: { color: themeColor('--text') }
-          }
+          legend: { display: true, labels: { color: themeColor('--text') } }
         },
         scales: {
           y: {
             type: 'linear',
             display: true,
             position: 'left',
-            title: {
-              display: true,
-              text: 'Temperatura (°C)',
-              color: themeColor('--accent2')
-            },
+            title: { display: true, text: 'Temperatura (°C)', color: themeColor('--text') },
             ticks: { color: themeColor('--muted') },
             grid: { color: themeColor('--glass') }
           },
@@ -360,11 +349,7 @@ function renderGeneralChart() {
             type: 'linear',
             display: true,
             position: 'right',
-            title: {
-              display: true,
-              text: 'Percentual (%)',
-              color: themeColor('--accent')
-            },
+            title: { display: true, text: 'Porcentagem (%)', color: themeColor('--text') },
             ticks: { color: themeColor('--muted') },
             grid: { drawOnChartArea: false },
             max: 100
@@ -380,31 +365,39 @@ function renderGeneralChart() {
 }
 
 /* ==========================
-   TABELA DE LOGS
+   ESTATÍSTICAS
+   ========================== */
+
+function renderStats() {
+  const hist = window.DATA.historico;
+  
+  if (hist.length === 0) return;
+  
+  const avgTemp = (hist.reduce((s, h) => s + h.temperatura, 0) / hist.length).toFixed(1);
+  const avgCpu = (hist.reduce((s, h) => s + h.cpu, 0) / hist.length).toFixed(1);
+  const avgMem = (hist.reduce((s, h) => s + h.memoria, 0) / hist.length).toFixed(1);
+  
+  document.getElementById('avgTemp').textContent = avgTemp;
+  document.getElementById('avgCpu').textContent = avgCpu;
+  document.getElementById('avgMem').textContent = avgMem;
+}
+
+/* ==========================
+   LOGS RECENTES
    ========================== */
 
 function renderLatestLogs() {
-  console.log('📋 Renderizando logs...');
-  
+  const logs = window.DATA.historico.slice(-5).reverse();
   const tbody = document.querySelector('#latestTable tbody');
   tbody.innerHTML = '';
   
-  const logs = window.DATA.historico.slice(-50).reverse();
-  
-  if (logs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:' + themeColor('--muted') + '">Aguardando dados...</td></tr>';
-    return;
-  }
-  
   logs.forEach(log => {
     const tr = document.createElement('tr');
-    const statusColor = log.status === 'NORMAL' ? themeColor('--accent3') : themeColor('--danger');
-    
     tr.innerHTML = `
-      <td style="color:${themeColor('--muted')}">${new Date(log.timestamp).toLocaleString()}</td>
-      <td style="color:${statusColor}">${log.status}</td>
+      <td>${new Date(log.timestamp).toLocaleString()}</td>
+      <td>${log.status}</td>
       <td>${log.temperatura.toFixed(1)}°C</td>
-      <td>${(log.nivel * 100).toFixed(0)}%</td>
+      <td>${log.nivel.toFixed(1) * 100}%</td>
       <td>${log.bomba}</td>
       <td>${log.cpu.toFixed(1)}%</td>
       <td>${log.memoria.toFixed(1)}%</td>
@@ -414,81 +407,185 @@ function renderLatestLogs() {
 }
 
 /* ==========================
-   TOPOLOGIA DO SISTEMA
+   TOPOLOGIA DE REDE - RENDERIZAÇÃO
    ========================== */
 
 function renderSimImage() {
+  console.log('🌐 Renderizando topologia de rede...');
+  
+  // Inicializa os nós apenas uma vez
+  if (!networkNodes) {
+    networkNodes = new vis.DataSet([
+      { 
+        id: 1, 
+        label: 'Físico',
+        shape: 'image',
+        image: 'img/fisico.png', // Coloque a imagem do ESP32 aqui
+        size: 35
+      },
+      { 
+        id: 2, 
+        label: 'Virtual',
+        shape: 'image',
+        image: 'img/virtual.png', // Coloque a imagem da réplica aqui
+        size: 35
+      },
+      { 
+        id: 3, 
+        label: 'Atacante',
+        shape: 'image',
+        image: 'img/ataque.png', // Coloque a imagem do atacante aqui
+        size: 30
+      },
+      { 
+        id: 4, 
+        label: 'Mitigador',
+        shape: 'image',
+        image: 'img/mitigacao.png', // Coloque a imagem do firewall aqui
+        size: 30
+      }
+    ]);
+  }
+  
+  // Inicializa as conexões apenas uma vez
+  if (!networkEdges) {
+    networkEdges = new vis.DataSet([
+      { 
+        id: 'esp32-replica',
+        from: 1, 
+        to: 2, 
+        color: { color: '#5DE3FA' },
+        width: 3
+      },
+      { 
+        id: 'atacante-replica',
+        from: 3, 
+        to: 2, 
+        dashes: true, 
+        color: { color: '#5DE3FA' },
+        width: 3
+      },
+      { 
+        id: 'mitigador-replica',
+        from: 4, 
+        to: 2,
+        dashes: true,
+        color: { color: '#5DE3FA' },
+        width: 3
+      }
+    ]);
+  }
+  
   const container = document.getElementById('simImage');
-  if (!container) return;
   
-  const { fisico, virtual } = window.DATA;
-  const { monitoramento } = virtual;
+  const data = {
+    nodes: networkNodes,
+    edges: networkEdges
+  };
   
-  // Cores baseadas no status
-  const tempColor = fisico.temperatura < 5 ? '#5DE3FA' : fisico.temperatura < 10 ? '#FAA45C' : '#ff6b6b';
-  const cpuColor = monitoramento.sistema.cpu < 50 ? '#5DE3FA' : monitoramento.sistema.cpu < 80 ? '#FAA45C' : '#ff6b6b';
-  const statusColor = monitoramento.status === 'NORMAL' ? '#5DE3FA' : '#FAA45C';
+  const options = {
+    nodes: {
+      borderWidth: 2,
+      borderWidthSelected: 4,
+      font: { 
+        size: 14, 
+        color: '#e6edf3',
+        background: 'rgba(20, 27, 28, 0.8)',
+        strokeWidth: 0
+      },
+      margin: 10,
+      shapeProperties: {
+        useBorderWithImage: false
+      }
+    },
+    edges: {
+      width: 3,
+      font: {
+        align: 'middle',
+        size: 12,
+        color: '#e6edf3',
+        background: 'rgba(20, 27, 28, 0.7)',
+        strokeWidth: 0
+      },
+      smooth: {
+        type: 'continuous'
+      }
+    },
+    physics: {enabled: false},
+    interaction: {
+      hover: true,
+      tooltipDelay: 200
+    }
+  };
   
-  const svg = `
-    <svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 800 400'>
-      <defs>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      
-      <rect width='100%' height='100%' fill='#141b1c'/>
-      
-      <!-- Sistema Físico -->
-      <g transform="translate(150, 200)">
-        <circle cx="0" cy="0" r="60" fill="${tempColor}" opacity="0.2" filter="url(#glow)"/>
-        <circle cx="0" cy="0" r="50" fill="${tempColor}" opacity="0.9"/>
-        <text x="0" y="-10" fill="#141b1c" font-size="14" font-weight="bold" text-anchor="middle">FÍSICO</text>
-        <text x="0" y="10" fill="#141b1c" font-size="12" text-anchor="middle">Temp: ${fisico.temperatura.toFixed(1)}°C</text>
-        <text x="0" y="25" fill="#141b1c" font-size="11" text-anchor="middle">Nível: ${(fisico.nivel * 100).toFixed(0)}%</text>
-      </g>
-      
-      <!-- Sistema Virtual -->
-      <g transform="translate(650, 200)">
-        <circle cx="0" cy="0" r="60" fill="${cpuColor}" opacity="0.2" filter="url(#glow)"/>
-        <circle cx="0" cy="0" r="50" fill="${cpuColor}" opacity="0.9"/>
-        <text x="0" y="-10" fill="#141b1c" font-size="14" font-weight="bold" text-anchor="middle">VIRTUAL</text>
-        <text x="0" y="10" fill="#141b1c" font-size="12" text-anchor="middle">CPU: ${monitoramento.sistema.cpu.toFixed(1)}%</text>
-        <text x="0" y="25" fill="#141b1c" font-size="11" text-anchor="middle">MEM: ${monitoramento.sistema.memoria.toFixed(1)}%</text>
-      </g>
-      
-      <!-- Conexão -->
-      <line x1="210" y1="200" x2="590" y2="200" stroke="${statusColor}" stroke-width="3" opacity="0.6" stroke-dasharray="5,5">
-        <animate attributeName="stroke-dashoffset" from="0" to="10" dur="1s" repeatCount="indefinite"/>
-      </line>
-      
-      <!-- Monitor Central -->
-      <g transform="translate(400, 200)">
-        <rect x="-40" y="-30" width="80" height="60" rx="8" fill="${statusColor}" opacity="0.9"/>
-        <text x="0" y="-5" fill="#141b1c" font-size="11" font-weight="bold" text-anchor="middle">MONITOR</text>
-        <text x="0" y="15" fill="#141b1c" font-size="10" text-anchor="middle">${monitoramento.status}</text>
-      </g>
-      
-      <!-- Bomba -->
-      <g transform="translate(150, 80)">
-        <circle cx="0" cy="0" r="25" fill="${fisico.bomba === 'ON' ? '#5DE3FA' : '#696B7A'}" opacity="0.9"/>
-        <text x="0" y="5" fill="#141b1c" font-size="10" font-weight="bold" text-anchor="middle">BOMBA</text>
-        <text x="0" y="-40" fill="#73B0BA" font-size="9" text-anchor="middle">${fisico.bomba}</text>
-      </g>
-      
-      <!-- Legendas -->
-      <g transform="translate(20, 20)">
-        <text fill="${themeColor('--accent')}" font-size="25" font-weight="bold">Sistema Frigorífico</text>
-        <text y="20" fill="${themeColor('--muted')}" font-size="9">Monitoramento em Tempo Real</text>
-      </g>
-    </svg>
-  `;
+  // Cria a rede apenas uma vez
+  if (!networkInstance) {
+    networkInstance = new vis.Network(container, data, options);
+    console.log('✅ Topologia criada com imagens');
+  }
+}
+
+/* ==========================
+   ATUALIZAÇÃO DA TOPOLOGIA EM TEMPO REAL
+   ========================== */
+
+function updateNetworkTopology() {
+  if (!networkEdges || !attackState) return;
   
-  container.innerHTML = svg;
+  console.log('🔄 Atualizando topologia - Flood:', attackState.flood, 'DoS:', attackState.dos);
+  
+  // Atualiza conexão atacante-replica baseado no estado de ataque
+  if (attackState.flood || attackState.dos) {
+    // ATAQUE ATIVO: conexão fica vermelha
+    networkEdges.update({
+      id: 'atacante-replica',
+      color: { color: '#D32F2F' }, // Vermelho
+      width: 5
+    });
+    console.log('🔴 Conexão de ataque: VERMELHA');
+  } else {
+    // SEM ATAQUE: conexão volta ao azul
+    networkEdges.update({
+      id: 'atacante-replica',
+      color: { color: '#5DE3FA' }, // Azul
+      width: 3
+    });
+    console.log('🔵 Conexão de ataque: AZUL');
+  }
+  
+  // A conexão do mitigador será atualizada pela função de mitigação
+}
+
+function showMitigationEffect() {
+  if (!networkEdges) return;
+  
+  console.log('🛡️ Mostrando efeito de mitigação');
+  
+  // Conexão mitigador-replica fica verde
+  networkEdges.update({
+    id: 'mitigador-replica',
+    color: { color: '#4CAF50' }, // Verde
+    width: 5
+  });
+  
+  // Conexão atacante-replica volta ao azul
+  networkEdges.update({
+    id: 'atacante-replica',
+    color: { color: '#5DE3FA' }, // Azul
+    width: 3
+  });
+  
+  console.log('🟢 Conexão de mitigação: VERDE');
+  
+  // Após 3 segundos, volta tudo ao normal
+  setTimeout(() => {
+    networkEdges.update({
+      id: 'mitigador-replica',
+      color: { color: '#5DE3FA' }, // Azul
+      width: 3
+    });
+    console.log('🔵 Conexão de mitigação: AZUL (normalizada)');
+  }, 3000);
 }
 
 /* ==========================
@@ -532,6 +629,8 @@ function renderMsgRateChart() {
   }
 }
 
+// Substitua a função renderEventAnalysisChart() no seu main.js por esta versão:
+
 function renderEventAnalysisChart() {
   const hist = window.DATA.historico;
   const statusCounts = {};
@@ -543,11 +642,33 @@ function renderEventAnalysisChart() {
   const labels = Object.keys(statusCounts);
   const data = Object.values(statusCounts);
   
+  // Mapa de cores por tipo de status (4 categorias específicas)
+  const statusColors = {
+    'NORMAL': themeColor('--accent3'),        // 🟢 Verde/Azul claro
+    'FLOOD': themeColor('--danger'),          // 🔴 Vermelho
+    'DOS': themeColor('--accent2'),           // 🟠 Laranja
+    'MITIGADO': themeColor('--success'),      // 🟢 Verde (sucesso)
+  };
+  
+  // Gera cores baseado nos labels (correspondência exata ou parcial)
+  const colors = labels.map(label => {
+    const upperLabel = label.toUpperCase();
+    
+    if (upperLabel.includes('NORMAL')) return statusColors['NORMAL'];
+    if (upperLabel.includes('FLOOD')) return statusColors['FLOOD'];
+    if (upperLabel.includes('DOS') || upperLabel.includes('DoS')) return statusColors['DOS'];
+    if (upperLabel.includes('MITIGADO') || upperLabel.includes('MITIGATED')) return statusColors['MITIGADO'];
+    
+    // Cor padrão (azul) se não encontrar correspondência
+    return themeColor('--accent');
+  });
+  
   const ctx = document.getElementById('eventAnalysisChart').getContext('2d');
   
   if (eventAnalysisChart) {
     eventAnalysisChart.data.labels = labels;
     eventAnalysisChart.data.datasets[0].data = data;
+    eventAnalysisChart.data.datasets[0].backgroundColor = colors;
     eventAnalysisChart.update();
   } else {
     eventAnalysisChart = new Chart(ctx, {
@@ -556,17 +677,31 @@ function renderEventAnalysisChart() {
         labels: labels,
         datasets: [{
           data: data,
-          backgroundColor: [
-            themeColor('--accent3'),
-            themeColor('--accent2'),
-            themeColor('--danger')
-          ]
+          backgroundColor: colors,
+          borderColor: themeColor('--bg'),
+          borderWidth: 2
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: themeColor('--text') } } }
+        plugins: { 
+          legend: { 
+            labels: { color: themeColor('--text') },
+            position: 'bottom'
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const label = context.label || '';
+                const value = context.parsed || 0;
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const percentage = ((value / total) * 100).toFixed(1);
+                return `${label}: ${value} (${percentage}%)`;
+              }
+            }
+          }
+        }
       }
     });
   }
@@ -644,6 +779,10 @@ attackFloodBtn.addEventListener('click', async () => {
       console.log("⚠️ Ataque Flood iniciado", result);
       alert("⚠️ Ataque Flood iniciado");
     }
+
+    // Atualiza a topologia
+    updateNetworkTopology();
+
   } catch (error) {
     console.error("Erro no botão Flood:", error);
   } finally {
@@ -672,6 +811,10 @@ attackDosBtn.addEventListener('click', async () => {
       console.log("⚠️ Ataque DoS iniciado", result);
       alert("⚠️ Ataque DoS iniciado");
     }
+
+    // Atualiza a topologia
+    updateNetworkTopology();
+
   } catch (error) {
     console.error("Erro no botão DoS:", error);
   } finally {
@@ -694,6 +837,10 @@ mitigateFloodBtn.addEventListener("click", async () => {
       attackFloodBtn.classList.remove("active");
       // attackFloodBtn.textContent = 'Flood';
     }
+
+    // Mostra efeito visual de mitigação
+    showMitigationEffect();
+    updateNetworkTopology();
 
     alert("🛡️ Mitigação Flood ativada com sucesso!\nO cenário será resetado em 10 segundos.");
   } catch (error) {
@@ -720,6 +867,10 @@ mitigateDosBtn.addEventListener("click", async () => {
       attackDosBtn.classList.remove("active");
       // attackDosBtn.textContent = 'DoS';
     }
+
+    // Mostra efeito visual de mitigação
+    showMitigationEffect();
+    updateNetworkTopology();
 
     alert("🛡️ Mitigação DoS ativada com sucesso!\nO cenário será resetado em 10 segundos.");
   } catch (error) {
@@ -801,6 +952,9 @@ async function checkProcessStatus() {
       }
     });
     
+    // Atualiza a topologia baseado no status
+    updateNetworkTopology();
+
     console.log("🔄 Status atualizado:", data);
     
   } catch (error) {
@@ -830,8 +984,7 @@ window.addEventListener('load', async () => {
     // Atualiza status periodicamente (a cada 30 segundos)
     setInterval(checkProcessStatus, 30000);
   } else {
-    console.error("❌ Dashboard não conseguiu conectar ao backend");
-    alert(`❌ Não foi possível conectar ao backend!\n\nURL: ${API_BASE_URL}\n\nCertifique-se que:\n1. O backend está rodando (python3 backendtestefinal.py)\n2. Ngrok está ativo (ngrok http 5001)\n3. A URL está correta: ${API_BASE_URL}`);
+    console.error("❌ Dashboard não conseguiu conectar ao backend");  
   }
 });
 
@@ -910,9 +1063,9 @@ function subscribeFirebase() {
       
       window.DATA.historico.push(entrada);
       
-      // Limita histórico a 1000 entradas
-      if (window.DATA.historico.length > 1000) {
-        window.DATA.historico = window.DATA.historico.slice(-1000);
+      // Limita histórico a 10000 entradas
+      if (window.DATA.historico.length > 10000) {
+        window.DATA.historico = window.DATA.historico.slice(-10000);
       }
       
       console.log('✅ Histórico atualizado:', window.DATA.historico.length, 'entradas');

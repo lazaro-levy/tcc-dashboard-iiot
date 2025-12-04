@@ -19,11 +19,17 @@
   <!-- Biblioteca de gráficos Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="css/style.css">
-
+  <!-- Biblioteca Vis.js -->
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  
   <!-- Biblioteca de ícones Lordicon -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  
+  <!-- Fonte Awesome para ícones Vis.js -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/style.css">
 
 </head>
 <body>
@@ -32,9 +38,13 @@
 
     <!-- ===== Sidebar lateral com abas e menu ===== -->
     <aside class="sidebar expanded" id="sidebar" role="navigation" aria-label="Menu lateral">
-      <!-- Logo da aplicação -->
-      <img src="img/logo.png" alt="Logo-CARIIoT" class="sidebar-logo" id="sidebarLogo">
 
+      <!-- Logo da aplicação -->
+      <div class="sidebar-logo-container">
+        <img src="img/logo.png" alt="Logo-CARIIoT" class="sidebar-logo-full" id="sidebarLogo">
+        <img src="img/chameleon-icon.png" alt="Ícone CARIIoT" class="sidebar-logo-icon" id="sidebarLogoIcon">
+      </div>
+      
       <!-- Botão toggle -->
       <button class="sidebar-toggle" id="sidebarToggle" title="Expandir/Recolher Menu">☰</button>
 
@@ -104,14 +114,14 @@
           <div class="graphs-column">
             <div class="card">
               <strong>Gráfico de Temperatura</strong>
-              <div style="height:180px; margin-top:8px;">
+              <div style="height:210px; margin-top:8px;">
                 <canvas id="tempChart" aria-label="Temperatura"></canvas>
               </div>
             </div>
 
             <div class="card">
               <strong>Gráfico de Recursos</strong>
-              <div style="height:180px; margin-top:8px;">
+              <div style="height:210px; margin-top:8px;">
                 <canvas id="resourceChart" aria-label="CPU e Memória"></canvas>
               </div>
             </div>
@@ -206,7 +216,7 @@
         <section id="page-tendencias" class="col wide" aria-label="Análise Detalhada" style="display:none;">
           <div class="card card-full">
             <strong>Análise Detalhada</strong>
-            <div class="small">Visualização detalhada do tráfego e das métricas do sistema.</div>
+            <div class="small">Visualização detalhada do tráfego e dos eventos do sistema.</div>
           </div>
 
           <!-- Gráfico geral acima -->

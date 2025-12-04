@@ -1,0 +1,13 @@
+const nodes = [
+  { id: 1, label: 'ESP32 - Físico' },
+  { id: 2, label: 'Réplica - Virtual' },
+  { id: 3, label: 'Atacante - Mosquitto' },
+  { id: 4, label: 'Mitigador - iptables' },
+
+];
+
+const connections = [
+  { from: 1, to: 2 }, // ESP32 -> Réplica
+  { from: 3, to: 2 } // Atacante -> Réplica
+  { from: 4, to: 2 } // Mitigador -> Réplica
+];
