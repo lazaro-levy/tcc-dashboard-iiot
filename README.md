@@ -18,11 +18,16 @@ Este dashboard atua em conjunto com o repositório de infraestrutura. Para enten
 [**tcc-ambiente-iiot**](https://github.com/cariiot35/tcc-ambiente-iiot)
 
 ## Tecnologias e Ferramentas
- - **Linguagem:** JavaScript (Vanilla), HTML5 e CSS3 (Bootstrap).
- - **Banco de Dados Realtime:** Firebase Realtime Database (Sincronização instantânea).
+ - **Linguagem:** JavaScript (Vanilla ES6+), HTML5 e CSS3.
+
+ - **Bibliotecas de Visualização:**
+    - **Chart.js:** Gráficos dinâmicos de telemetria.
+    - **Vis.js:** Renderização da topologia da rede IIoT.
+    - **Lucide & Font Awesome:** Iconografia do sistema.
+
+ - **Banco de Dados Realtime:** Firebase Realtime Database.
+
  - **Hospedagem (Hosting):** Firebase Hosting.
- - **Integração:** API de comunicação com o ambiente de testes IIoT.
- - **Desenvolvimento:** GitHub Codespaces.
 
 ## Estrutura do Repositório
  - `/frontend`: Arquivos principais da interface (HTML, CSS e JS).
@@ -32,8 +37,11 @@ Este dashboard atua em conjunto com o repositório de infraestrutura. Para enten
 
 ## Funcionalidades
  - **Monitoramento em Tempo Real:** Visualização de dados sem necessidade de refresh.
+
  - **Alertas Críticos:** Identificação visual de ataques de DoS e Flood.
+
  - **Status de Dispositivos:** Lista e saúde dos nós conectados na rede.
+
  - **Interface Responsiva:** Adaptada para visualização em diferentes dispositivos.
 
 ## Autores
