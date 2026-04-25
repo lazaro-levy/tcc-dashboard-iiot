@@ -44,24 +44,40 @@ Este dashboard atua em conjunto com o repositório de infraestrutura. Para enten
 
  - **Interface Responsiva:** Adaptada para visualização em diferentes dispositivos.
 
-## Autores
-**Projeto desenvolvido por:**
- - Laís de Sá Santos;
- - Lázaro Levy Fragoso de Souza; 
- - Lucas Silva Matos;
- - Maria Clara Jardim Oliveira;
- - Marina de Jesus Carneiro;
+## Créditos e Colaboração
+
+Este projeto é fruto de um trabalho coletivo desenvolvido como **Trabalho de Conclusão de Curso (TCC)** na **Etec de Embu**. 
+
+Embora este repositório represente minha visão e contribuição individual para o portfólio, o sucesso do projeto CARIIoT foi possível graças ao esforço conjunto da equipe:
+
+**Desenvolvimento e Infraestrutura do Dashboard:**
+ - Lázaro Levy Fragoso de Souza;
  - Nicoly Karoline Matzembacher;
- - Rafaela Oliveira Correia;
- - Vitor Marçal Moreira.
+ - Rafaela Oliveira Correia.
+
+**Equipe de Projeto:**
+- Laís de Sá Santos;
+- Lázaro Levy Fragoso de Souza; 
+- Lucas Silva Matos;
+- Maria Clara Jardim Oliveira;
+- Marina de Jesus Carneiro;
+- Nicoly Karoline Matzembacher;
+- Rafaela Oliveira Correia;
+- Vitor Marçal Moreira.
+
+**Orientação:** Fabiano Cavalcante - Coordenador do Ensino Médio com Habilitação Técnica em Redes de Computadores.
 
 **Instituição:** Etec de Embu
 
 **Ano:** 2025
 
+### Nota de Responsabilidade
+O código contido neste perfil é uma cópia (fork) do projeto original, mantida para fins de estudo, demonstração de competências técnicas em **Segurança IIoT, Cloud e Frontend** e preservação do histórico acadêmico.
+
 ## Agradecimentos
 Agradecimentos especiais a:
-- Orientador(a) do TCC;
+- Equipe do projeto pelo trabalho realizado;
+- Orientador do TCC pela supervisão;
 - Equipe do Firebase/Google pelo suporte à hospedagem;
 - Comunidade de desenvolvedores frontend.
 
@@ -74,7 +90,7 @@ Agradecimentos especiais a:
 - [MDN Web Docs - JavaScript](https://developer.mozilla.org/pt-BR/docs/Web/JavaScript) - Referência base para o desenvolvimento da lógica em JavaScript Vanilla (ES6+).
 - [Normalize.css](https://necolas.github.io/normalize.css/) - Recurso utilizado para garantir a consistência visual entre diferentes navegadores.
 
-**Última atualização:** 2026-04-23
+**Última atualização:** 2026-04-25
 
 > ⭐ Se este repositório foi útil, considere deixar uma estrela! ⭐
 </div>
