@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/cariiot35/tcc-dashboard-iiot/blob/8f55a6b040ba20e2c24a13e980de1e76af37c7d8/CARIIoT/frontend/img/logo.png" alt="CARIIOT" width="600">
+  <img src="https://github.com/lazaro-levy/tcc-dashboard-iiot/blob/8f55a6b040ba20e2c24a13e980de1e76af37c7d8/CARIIoT/frontend/img/logo.png" alt="CARIIOT" width="600">
 </div>
 
 ## Sobre CARIIoT (Dashboard)
@@ -15,7 +15,7 @@ Este repositório contém o código-fonte do **Dashboard Web**, a camada visual 
 
 ## Conexão com o Ambiente
 Este dashboard atua em conjunto com o repositório de infraestrutura. Para entender como os dados são gerados e como os ataques são simulados, acesse:
-[**tcc-ambiente-iiot**](https://github.com/cariiot35/tcc-ambiente-iiot)
+[**tcc-ambiente-iiot**](https://github.com/lazaro-levy/tcc-ambiente-iiot)
 
 ## Tecnologias e Ferramentas
  - **Linguagem:** JavaScript (Vanilla ES6+), HTML5 e CSS3.
