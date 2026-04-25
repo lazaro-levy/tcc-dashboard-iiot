@@ -66,9 +66,13 @@ Agradecimentos especiais a:
 - Comunidade de desenvolvedores frontend.
 
 ## Referências
-- [Firebase Documentation](https://firebase.google.com/docs) - Documentação oficial sobre Hosting e Realtime Database.
-- [Bootstrap Docs](https://getbootstrap.com/docs/) - Referência para a estilização e responsividade da interface.
-- [JavaScript.info](https://javascript.info/) - Guia para lógica de manipulação de DOM e integração com APIs.
+
+- [Firebase Documentation](https://firebase.google.com/docs) - Guia oficial para integração do Realtime Database e Hosting.
+- [Chart.js Documentation](https://www.chartjs.org/docs/latest/) - Referência para a criação dos gráficos dinâmicos de telemetria.
+- [Vis.js Network](https://visjs.github.io/vis-network/docs/network/) - Documentação utilizada para a renderização da topologia de rede IIoT.
+- [Lucide Icons](https://lucide.dev/docs/lucide) - Biblioteca de ícones vetoriais utilizada na interface.
+- [MDN Web Docs - JavaScript](https://developer.mozilla.org/pt-BR/docs/Web/JavaScript) - Referência base para o desenvolvimento da lógica em JavaScript Vanilla (ES6+).
+- [Normalize.css](https://necolas.github.io/normalize.css/) - Recurso utilizado para garantir a consistência visual entre diferentes navegadores.
 
 **Última atualização:** 2026-04-23
 
